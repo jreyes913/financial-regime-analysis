@@ -1,0 +1,21 @@
+[project]
+name = "project-02-09-26"
+version = "0.1.0"
+description = "Finanical Data Analytics Dashboard"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "altair<5",
+    "loguru>=0.7.3",
+    "matplotlib>=3.10.8",
+    "mplfinance>=0.12.10b0",
+    "numpy>=2.4.2",
+    "python-dotenv>=1.2.1",
+    "streamlit>=1.19.0",
+    "yfinance>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.0",
+]
