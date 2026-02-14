@@ -1,6 +1,18 @@
 import yfinance as yf
 import numpy as np
 
+def ols_slope_t(y_window):
+    n = len(y_window)
+    x = np.arange(n)
+    x_mean = x.mean()
+    y_mean = y_window.mean()
+    denominator = np.sum((x - x_mean)**2)
+    beta = np.sum((x - x_mean) * (y_window - y_mean)) / denominator
+    residuals = y_window - (y_mean + beta * (x - x_mean))
+    s_squared = np.sum(residuals**2) / (n - 2)
+    se_beta = np.sqrt(s_squared / denominator)
+    return beta / se_beta
+
 class stockData:
     def __init__(self):
         self.symbol = ""
@@ -42,17 +54,38 @@ class stockData:
         self.interval = interval
         self.history = history
         self.has_data = True
-    def markov_states(self):
+    def markov_states(
+            self,
+            days:int=63
+    ):
         if not self.has_data:
             print("No data to analyze.")
         else:
             calculations = self.history.copy()
-            calculations["Rolling Vol"] = calculations["Log Return"].rolling(window=63).std()
-            calculations["Rolling Mean"] = calculations["Log Return"].rolling(window=63).mean()
-            quantiles = calculations["Rolling Vol"].quantile([0.3,0.85]).values
+            #calculations["Rolling Vol"] = calculations["Log Return"].rolling(window=days).std()
+            calculations["Normal Open"] = np.log(
+                calculations["Open"] / calculations["Close"].shift(1)
+            )
+            calculations["Normal High"] = np.log(
+                calculations["High"] / calculations["Open"]
+            )
+            calculations["Normal Low"] = np.log(
+                calculations["Low"] / calculations["Open"]
+            )
+            calculations["Normal Close"] = np.log(
+                calculations["Close"] / calculations["Open"]
+            )
+            calculations["Normal Close Var"] = calculations["Normal Close"].rolling(window=days).var()
+            calculations["Normal Open Var"] = calculations["Normal Open"].rolling(window=days).var()
+            calculations["RS Var"] = (calculations["Normal High"]*(calculations["Normal High"] - calculations["Normal Close"]) + calculations["Normal Low"]*(calculations["Normal Low"] - calculations["Normal Close"])).rolling(window=days).mean()
+            k = 0.34 / (1.34 + ((days+1)/(days-1)))
+            calculations["YZ Var"] = calculations["Normal Open Var"] + k*calculations["Normal Close Var"] + (1-k)*calculations["RS Var"]
+    #        calculations["Rolling Mean"] = calculations["Log Return"].rolling(window=days).mean()
+            calculations["Trend t-stat"] = calculations["Log Return"].rolling(window=days).apply(ols_slope_t, raw=True)
+            quantiles = calculations["YZ Var"].quantile([0.25,0.9]).values
             def separator(row):
-                vol = row["Rolling Vol"]
-                mean = row["Rolling Mean"]
+                vol = row["YZ Var"]
+                mean = row["Trend t-stat"]
                 if vol < quantiles[0]:
                     if mean < 0:
                         return 4
@@ -119,8 +152,8 @@ class stockData:
 
             self.pred_price_runs = prices.T.tolist()
             self.pred_state_runs = states.T.tolist()
-            self.drift = self.history["Log Return"].mean() * 63
-            self.volatility = self.history['Log Return'].std() * np.sqrt(63)
+            self.drift = self.history["Log Return"].mean() * days
+            self.volatility = self.history['Log Return'].std() * np.sqrt(days)
             self.has_pred = True
         else:
             print("No Markov states to make predictions.")
