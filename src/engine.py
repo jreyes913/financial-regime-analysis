@@ -20,7 +20,7 @@ class stockData:
     def ticker_data(
             self,
             symbol: str,
-            period: str = "3y",
+            period: str = "5y",
             interval: str = "1d"
     ):
         ticker = yf.Ticker(symbol)
@@ -47,17 +47,35 @@ class stockData:
             print("No data to analyze.")
         else:
             calculations = self.history.copy()
-            calculations["Rolling Var"] = calculations["Log Return"].rolling(window=63).var()
-            quantiles = calculations["Rolling Var"].quantile([0.3,0.85]).values
-            separator = lambda x: 1 if x < quantiles[0] else 2 if x < quantiles[1] else 3
-            calculations["State"] = calculations["Rolling Var"].apply(separator)
+            calculations["Rolling Vol"] = calculations["Log Return"].rolling(window=63).std()
+            calculations["Rolling Mean"] = calculations["Log Return"].rolling(window=63).mean()
+            quantiles = calculations["Rolling Vol"].quantile([0.3,0.85]).values
+            def separator(row):
+                vol = row["Rolling Vol"]
+                mean = row["Rolling Mean"]
+                if vol < quantiles[0]:
+                    if mean < 0:
+                        return 4
+                    else:
+                        return 3
+                elif vol < quantiles[1]:
+                    if mean < 0:
+                        return 5
+                    else:
+                        return 2
+                else:
+                    if mean < 0:
+                        return 6
+                    else:
+                        return 1
+            calculations["State"] = calculations.apply(separator, axis=1)
             states = calculations["State"].to_numpy()
             day_0 = states[:-1]
             day_f = states[1:]
-            transition_matrix = np.zeros((3, 3))
-            for i, state_0 in enumerate((1, 2, 3)):
+            transition_matrix = np.zeros((6, 6))
+            for i, state_0 in enumerate((1, 2, 3, 4, 5, 6)):
                 total_occurrences_of_i = (day_0 == state_0).sum()
-                for j, state_f in enumerate((1, 2, 3)):
+                for j, state_f in enumerate((1, 2, 3, 4, 5, 6)):
                     mask = (day_0 == state_0) & (day_f == state_f)
                     count_i_to_j = mask.sum()
                     if total_occurrences_of_i > 0:
@@ -75,7 +93,7 @@ class stockData:
     def monte_carlo(
             self,
             days:int=63,
-            num_runs:int=int(5e3)
+            num_runs:int=int(1e4)
     ):
         if self.has_states:
             start_price = self.history['Close'].iloc[-1]

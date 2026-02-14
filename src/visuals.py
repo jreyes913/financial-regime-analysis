@@ -30,6 +30,16 @@ streamlit_style = {
 plt.style.use(streamlit_style)
 figheight = 3.2
 figsize = (figheight*4, figheight)
+
+colors = {
+    1: "#14532D",  # dark green
+    2: "#16A34A",  # green
+    3: "#BBF7D0",  # light green
+    4: "#FECACA",  # light red
+    5: "#DC2626",  # red
+    6: "#7F1D1D"   # darker red
+}
+
 def format_mpf_axis(ax, df):
     years = df.index.year
     unique_years = sorted(years.unique())
@@ -65,7 +75,6 @@ class stockPlots:
     def plot_markov_states(self):
         if self.stock.has_states:
             fig, axes = plt.subplots(figsize=figsize, dpi=300)
-            colors = {1: 'green', 2: 'orange', 3: 'red'}
             for state, color in colors.items():
                 masked_price = np.where(
                     self.stock.calculations['State'] == state,
@@ -90,7 +99,6 @@ class stockPlots:
         if self.stock.has_pred:
             fig, axes = plt.subplots(figsize=figsize, dpi=300)
             expected_value = np.mean(self.stock.pred_price_runs, axis=0)
-            colors = {1: 'green', 2: 'orange', 3: 'red'}
             for idx, run in enumerate(self.stock.pred_price_runs):
                 for state, color in colors.items():
                     masked_price = np.where(
@@ -102,8 +110,8 @@ class stockPlots:
                         np.arange(len(run)),
                         masked_price,
                         color=color,
-                        linewidth=1,
-                        alpha=0.7,
+                        linewidth=0.8,
+                        alpha=0.5,
                     )
             axes.plot(
                 np.arange(len(self.stock.pred_price_runs[0])),

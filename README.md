@@ -10,9 +10,7 @@ Instead of assuming constant volatility like standard GBM, the model allows vola
 
 Daily log returns are computed as:
 
-$$
-r_t = \ln\left(\frac{S_t}{S_{t-1}}\right)
-$$
+$$r_t = \ln\left(\frac{S_t}{S_{t-1}}\right)$$
 
 A 63-day rolling variance of returns is calculated, and volatility regimes are assigned using historical percentiles:
 
@@ -28,9 +26,7 @@ This creates a data-driven volatility classification rather than manually defini
 
 A first-order Markov transition matrix $P$ is estimated from historical state changes:
 
-$$
-P_{ij} = \mathbb{P}(S_{t+1}=j \mid S_t=i)
-$$
+$$P_{ij} = \mathbb{P}(S_{t+1}=j \mid S_t=i)$$
 
 This matrix determines how likely the system is to remain in the same volatility regime or transition to another one during simulation.
 
@@ -40,19 +36,13 @@ This matrix determines how likely the system is to remain in the same volatility
 
 For each state $i$, the conditional mean and standard deviation of returns are calculated:
 
-$$
-\mu_i = \mathbb{E}[r_t \mid S_t = i]
-$$
+$$\mu_i = \mathbb{E}[r_t \mid S_t = i]$$
 
-$$
-\sigma_i = \mathrm{Std}(r_t \mid S_t = i)
-$$
+$$\sigma_i = \mathrm{Std}(r_t \mid S_t = i)$$
 
 Returns are modeled as:
 
-$$
-r_t \mid S_t=i \sim \mathcal{N}(\mu_i, \sigma_i^2)
-$$
+$$r_t \mid S_t=i \sim \mathcal{N}(\mu_i, \sigma_i^2)$$
 
 So volatility and drift are allowed to vary depending on the active regime.
 
@@ -63,15 +53,13 @@ So volatility and drift are allowed to vary depending on the active regime.
 For each simulated path:
 
 1. The next regime is sampled using the transition matrix.
-2. A random shock $ Z \sim \mathcal{N}(0,1) $ is drawn.
+2. A random shock $Z \sim \mathcal{N}(0,1)$ is drawn.
 3. Price evolves according to a regime-dependent diffusion process:
 
-$$
-S_{t+1} =
+$$S_{t+1} =
 S_t \exp\left(
 \mu_i - \frac{\sigma_i^2}{2} + \sigma_i Z
-\right)
-$$
+\right)$$
 
 Over 1,000+ simulated paths, this approach captures:
 
@@ -80,4 +68,4 @@ Over 1,000+ simulated paths, this approach captures:
 - State-dependent dispersion  
 - Non-constant risk dynamics  
 
-Unlike standard GBM (which assumes constant $\mu$ and $ \sigma $), this model allows risk behavior to evolve based on historical regime structure.
+Unlike standard GBM (which assumes constant $\mu$ and $\sigma$), this model allows risk behavior to evolve based on historical regime structure.

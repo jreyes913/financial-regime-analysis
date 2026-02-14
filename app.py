@@ -1,9 +1,18 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import numpy as np
 from src.engine import stockData
 from src.visuals import stockPlots
 
 st.set_page_config(page_title="Contenuix | Stock Analytics", layout="wide")
+st.markdown("""
+<style>
+hr {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+</style>
+""", unsafe_allow_html=True)
 st.title("📈 Financial Data Analytics")
 st.markdown("---")
 with st.sidebar:
@@ -44,26 +53,51 @@ if submit_button:
         * **Time Horizon:** 1Q (63 Days).
         """)
     with row2_col3:
-        st.markdown("### Markov State Meanings")
-        st.markdown("""
-        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-            <div style="width:18px; height:18px; background-color:green; border-radius:4px; margin-right:10px;"></div>
-            <span><b>State 1 — Low Volatility Regime</b><br>
-            Volatility below the 30th percentile.<br>
-        </div>
+        components.html("""
+        <div style="
+            background-color: #F9FAFB;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #E5E7EB;
+            font-family: sans-serif;
+            font-size: 14px;
+        ">
 
-        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-            <div style="width:18px; height:18px; background-color:gold; border-radius:4px; margin-right:10px;"></div>
-            <span><b>State 2 — Moderate Volatility Regime</b><br>
-            Volatility between the 30th and 85th percentiles.<br>
-        </div>
+            <h4 style="margin-top:0;">Markov Regime Meanings</h4>
 
-        <div style="display: flex; align-items: center;">
-            <div style="width:18px; height:18px; background-color:red; border-radius:4px; margin-right:10px;"></div>
-            <span><b>State 3 — High Volatility Regime</b><br>
-            Volatility above the 85th percentile.<br>
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                <div style="width:18px; height:18px; background:#14532D; border-radius:5px; margin-right:12px;"></div>
+                <div><b>State 1</b> — High Volatility Profit</div>
+            </div>
+
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                <div style="width:18px; height:18px; background:#16A34A; border-radius:5px; margin-right:12px;"></div>
+                <div><b>State 2</b> — Medium Volatility Profit</div>
+            </div>
+
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                <div style="width:18px; height:18px; background:#BBF7D0; border-radius:5px; margin-right:12px;"></div>
+                <div><b>State 3</b> — Low Volatility Profit</div>
+            </div>
+
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                <div style="width:18px; height:18px; background:#FECACA; border-radius:5px; margin-right:12px;"></div>
+                <div><b>State 4</b> — Low Volatility Loss</div>
+            </div>
+
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                <div style="width:18px; height:18px; background:#DC2626; border-radius:5px; margin-right:12px;"></div>
+                <div><b>State 5</b> — Medium Volatility Loss</div>
+            </div>
+
+            <div style="display:flex; align-items:center;">
+                <div style="width:18px; height:18px; background:#7F1D1D; border-radius:5px; margin-right:12px;"></div>
+                <div><b>State 6</b> — High Volatility Loss</div>
+            </div>
+
         </div>
-        """, unsafe_allow_html=True)
+        """, height=330)
+    st.markdown("### Summary Metrics")
     st.markdown("---")
     final_prices = np.array(stock.pred_price_runs)[:, -1]
     pop = (final_prices > stock.history["Close"].iloc[-1]).mean()
