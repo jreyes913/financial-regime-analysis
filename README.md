@@ -71,4 +71,11 @@ Over 1,000+ simulated paths, this approach captures:
 - State-dependent dispersion  
 - Non-constant risk dynamics  
 
-Unlike standard GBM (which assumes constant $\mu$ and $\sigma$), this model allows risk behavior to evolve based on historical regime structure.
+
+Jose Reyes  
+Interested in data science
+
+## Contact
+
+📧 jstunner55@gmail.com  
+🔗 LinkedIn: https://www.linkedin.com/in/jose-reyes-634768264
