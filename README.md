@@ -1,3 +1,6 @@
+## Example
+![Dashboard Example](./example.png)
+
 ## 📈 Methodology
 
 This dashboard uses a **Markov-Switching lognormal diffusion model** to simulate forward price paths over a 63-day (quarterly) horizon.
