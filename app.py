@@ -3,6 +3,8 @@ import streamlit.components.v1 as components
 import numpy as np
 from src.engine import stockData
 from src.visuals import stockPlots
+from datetime import datetime
+from datetime import timedelta
 
 st.set_page_config(page_title="Contenuix | Stock Analytics", layout="wide")
 st.markdown("""
@@ -18,12 +20,16 @@ st.markdown("---")
 with st.sidebar:
     with st.form("ticker_form"):
         symbol = st.text_input("Stock Symbol", value="AAPL").upper()
+        window = st.number_input("Analyzing Window", value=63)
+        start_date = st.date_input("Start Date", value=datetime.today()-timedelta(days=365.25*5))
+        end_date = st.date_input("End Date", value=datetime.today())
         submit_button = st.form_submit_button("Simulate")
+
 if submit_button:
     stock = stockData()
-    stock.ticker_data(symbol=symbol)
-    stock.markov_states()
-    stock.monte_carlo()
+    stock.ticker_data(symbol=symbol, start=start_date, end=end_date)
+    stock.markov_states(days=window)
+    stock.monte_carlo(days=window)
     plots = stockPlots(stock)
     fig1 = plots.plot_markov_states()
     fig2 = plots.plot_historical_price()

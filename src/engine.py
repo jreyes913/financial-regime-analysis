@@ -1,5 +1,7 @@
 import yfinance as yf
 import numpy as np
+from datetime import datetime
+from datetime import timedelta
 
 def ols_slope_t(y_window):
     n = len(y_window)
@@ -15,9 +17,10 @@ def ols_slope_t(y_window):
 
 class stockData:
     def __init__(self):
-        self.symbol = ""
-        self.period = ""
-        self.interval = ""
+        self.symbol = None
+        self.start = None
+        self.end = None
+        self.interval = None
         self.history = None
         self.has_data = False
         self.calculations = None
@@ -29,14 +32,17 @@ class stockData:
         self.drift = None
         self.volatility = None
         self.has_pred = False
+        self.days = None
     def ticker_data(
             self,
-            symbol: str,
-            period: str = "5y",
-            interval: str = "1d"
+            symbol: str = "AAPL",
+            #period: str = "5y",
+            interval: str = "1d",
+            start: datetime = datetime.today() - timedelta(days=365.25*5),
+            end: datetime = datetime.today()
     ):
         ticker = yf.Ticker(symbol)
-        history = ticker.history(period=period, interval=interval)
+        history = ticker.history(interval=interval, start=start, end=end)
         set_upper = lambda row: row["Close"] if row["Close"] >= row["Open"] else row["Open"]
         set_lower = lambda row: row["Close"] if row["Close"] < row["Open"] else row["Open"]
         history["Upper"] = history.apply(set_upper, axis=1)
@@ -50,7 +56,9 @@ class stockData:
         history.dropna(inplace=True)
         history.drop(columns=["Dividends", "Stock Splits", "Volume"], inplace=True)
         self.symbol = symbol
-        self.period = period
+        #self.period = period
+        self.start = start
+        self.end = end
         self.interval = interval
         self.history = history
         self.has_data = True
@@ -121,6 +129,7 @@ class stockData:
             calculations.dropna(inplace=True)
             self.calculations_states = calculations_states
             self.transition_matrix = transition_matrix
+            self.days = days
             self.calculations = calculations
             self.has_states = True
     def monte_carlo(

@@ -82,7 +82,7 @@ class stockPlots:
                     np.nan
                 )
                 axes.plot(
-                    np.arange(len(self.stock.calculations))+63,
+                    np.arange(len(self.stock.calculations))+self.stock.days,
                     masked_price,
                     color=color,
                     linewidth=2
