@@ -60,11 +60,11 @@ if submit_button:
         st.write(f"""
         This forecast for **{symbol}** is generated using a Geometric Brownian Motion (GBM) model. 
         By iterating through thousands of potential price paths, we can visualize the 
-        statistical probability of future price targets.
-        **Key Quarterly Foreacast Parameters:**
+        statistical probability of future price targets.\n
+        **Key Foreacast Parameters:**
         * **Drift ($\mu$):** {stock.drift:.2%}
         * **Volatility ($\sigma$):** {stock.volatility:.2%}
-        * **Time Horizon:** 1Q (63 Days).
+        * **Time Horizon:** {stock.days} Days
         """)
     with row2_col3:
         components.html("""

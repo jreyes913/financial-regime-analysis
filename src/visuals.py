@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf
 import numpy as np
 from .engine import stockData
+import pandas as pd
 
 streamlit_light = {
     "primary": "#FF4B4B",
@@ -41,11 +42,15 @@ colors = {
 }
 
 def format_mpf_axis(ax, df):
-    years = df.index.year
-    unique_years = sorted(years.unique())
-    tick_indices = [np.where(years == y)[0][0] for y in unique_years]
+    unique_years = sorted(df.index.year.unique())
+    tick_indices = []
+    for year in unique_years:
+        ts = pd.Timestamp(year, 1, 1, tz='UTC')
+        idx_array = np.where(df.index >= ts)[0]
+        if len(idx_array) > 0:
+            tick_indices.append(idx_array[0])
     ax.set_xticks(tick_indices)
-    ax.set_xticklabels(unique_years)
+    ax.set_xticklabels([df.index[i].year for i in tick_indices])
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     plt.setp(ax.get_xticklabels(), rotation=0)
@@ -64,7 +69,7 @@ class stockPlots:
             warn_too_much_data=int(2e3),
             scale_width_adjustment=dict(candle=10)
         )
-        axes.set_xlim((-63, 252*3 + 64))
+        axes.set_xlim((-63, len(self.stock.history) + 63))
         axes.set_ylim((self.stock.history["Lower"].min()*0.9, self.stock.history["Upper"].max()*1.1))
         axes.yaxis.tick_left()
         axes.yaxis.set_label_position("left")
@@ -87,7 +92,7 @@ class stockPlots:
                     color=color,
                     linewidth=2
                 )
-            axes.set_xlim((-63, 252*3 + 63))
+            axes.set_xlim((-63, len(self.stock.history) + 63))
             axes.set_ylim((self.stock.history["Lower"].min()*0.9, self.stock.history["Upper"].max()*1.1))
             axes.set_ylabel("Price (USD)")
             axes.grid(visible=True, axis='y')

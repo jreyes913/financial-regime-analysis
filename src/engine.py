@@ -44,32 +44,49 @@ class stockData:
             limit: int = 1500
     ):
         key = self.api_key
-        base_url = "https://api.marketstack.com/v1/eod"
+        base_url = "https://api.marketstack.com/v2/eod"
         start_date = start.strftime(format="%Y-%m-%d")
         end_date = end.strftime(format="%Y-%m-%d")
         params = {
-            "access_key" : key,
-            "symbols" : symbol,
-            "date_from" : start_date,
-            "date_to" : end_date,
-            "limit" : limit
+            "access_key": key,
+            "symbols": symbol,
+            "exchange": "XNAS", 
+            "date_from": start_date,
+            "date_to": end_date,
+            "sort": "ASC",
+            "limit": limit  # API hard limit per request is 1000.[3]
         }
-        start_date = start.strftime(format="%Y-%m-%d")
-        end_date = end.strftime(format="%Y-%m-%d")
-        with httpx.Client(http2=False, timeout=10.0) as client:
-            r = client.get(base_url, params=params)
-            r.raise_for_status()
-            data = r.json()["data"]
-        history = pd.json_normalize(data)
-        history['date'] = pd.to_datetime(history['date'])
+        all_data = []
+        offset = 0
+        with httpx.Client(http2=False, timeout=15.0) as client:
+            while True:
+                params["offset"] = offset
+                r = client.get(base_url, params=params)
+                r.raise_for_status()
+                response_json = r.json()
+                batch_data = response_json.get("data",)
+                all_data.extend(batch_data)
+                total_available = response_json["pagination"]["total"]
+                offset += len(batch_data)
+                if offset >= total_available or offset >= limit:
+                    break
+        history = pd.json_normalize(all_data)
         history['Date'] = pd.to_datetime(history['date'])
-        history = history.rename(columns={
-            'open': 'Open',
-            'high': 'High',
-            'low': 'Low',
-            'close': 'Close',
-            'volume': 'Volume'
-        })
+        history['date'] = pd.to_datetime(history['date'])
+        history = history.sort_values('date', ascending=False).reset_index(drop=True)
+        history['adj_factor'] = 1.0
+        cum_factor = 1.0
+        for i in range(len(history)):
+            history.at[i, 'adj_factor'] = cum_factor
+            row_split = history.at[i, 'split_factor'] if history.at[i, 'split_factor'] > 0 else 1.0
+            row_div = history.at[i, 'dividend'] if history.at[i, 'dividend'] > 0 else 0.0
+            div_ratio = (history.at[i, 'close'] - row_div) / history.at[i, 'close'] if row_div > 0 else 1.0
+            cum_factor *= (div_ratio / row_split)
+        history['Open'] = history['open'] * history['adj_factor']
+        history['High'] = history['high'] * history['adj_factor']
+        history['Low'] = history['low'] * history['adj_factor']
+        history['Close'] = history['close'] * history['adj_factor']
+        history['Volume'] = history['volume'] / history['adj_factor'] # Volume scales inversely
         history = history[['Date', 'Open', 'High', 'Low', 'Close']]
         history = history.set_index('Date').sort_index()
         set_upper = lambda row: row["Close"] if row["Close"] >= row["Open"] else row["Open"]
@@ -160,7 +177,7 @@ class stockData:
     def monte_carlo(
             self,
             days:int=63,
-            num_runs:int=int(1e4)
+            num_runs:int=int(2e4)
     ):
         if self.has_states:
             start_price = self.history['Close'].iloc[-1]
