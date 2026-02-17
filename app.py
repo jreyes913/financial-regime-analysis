@@ -117,12 +117,18 @@ if submit_button:
     final_prices = np.array(stock.pred_price_runs)[:, -1]
     returns = final_prices / S0 - 1
     pop = (returns > 0).mean()
-    avg_gain = returns[returns > 0].mean()
-    avg_loss = returns[returns < 0].mean()
-    col1, col2, col3 = st.columns(3)
+    avg_gain = returns[returns > 0].mean() if (returns > 0).any() else 0
+    avg_loss = returns[returns < 0].mean() if (returns < 0).any() else 0
+    expected_return = returns.mean()
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Probability of Profit", f"{pop:.2%}")
-    col2.metric("Average Gain (Given Profit)", f"{avg_gain:.2%}")
-    col3.metric("Average Loss (Given Loss)", f"{abs(avg_loss):.2%}")
+    col2.metric("Average Gain", f"{avg_gain:.2%}")
+    col3.metric("Average Loss", f"{abs(avg_loss):.2%}")
+    delta_color = "normal"
+    col4.metric(
+        "Expected Return",
+        f"{expected_return:.2%}"
+    )
 
 else:
     st.info("Enter a ticker symbol in the sidebar and click 'Simulate' to begin.")
