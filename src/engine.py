@@ -1,7 +1,8 @@
-import yfinance as yf
+import pandas as pd
 import numpy as np
 from datetime import datetime
 from datetime import timedelta
+import httpx
 
 def ols_slope_t(y_window):
     n = len(y_window)
@@ -16,7 +17,8 @@ def ols_slope_t(y_window):
     return beta / se_beta
 
 class stockData:
-    def __init__(self):
+    def __init__(self, api_key):
+        self.api_key = api_key
         self.symbol = None
         self.start = None
         self.end = None
@@ -36,13 +38,40 @@ class stockData:
     def ticker_data(
             self,
             symbol: str = "AAPL",
-            #period: str = "5y",
             interval: str = "1d",
             start: datetime = datetime.today() - timedelta(days=365.25*5),
-            end: datetime = datetime.today()
+            end: datetime = datetime.today(),
+            limit: int = 1500
     ):
-        ticker = yf.Ticker(symbol)
-        history = ticker.history(interval=interval, start=start, end=end)
+        key = self.api_key
+        base_url = "https://api.marketstack.com/v1/eod"
+        start_date = start.strftime(format="%Y-%m-%d")
+        end_date = end.strftime(format="%Y-%m-%d")
+        params = {
+            "access_key" : key,
+            "symbols" : symbol,
+            "date_from" : start_date,
+            "date_to" : end_date,
+            "limit" : limit
+        }
+        start_date = start.strftime(format="%Y-%m-%d")
+        end_date = end.strftime(format="%Y-%m-%d")
+        with httpx.Client(http2=False, timeout=10.0) as client:
+            r = client.get(base_url, params=params)
+            r.raise_for_status()
+            data = r.json()["data"]
+        history = pd.json_normalize(data)
+        history['date'] = pd.to_datetime(history['date'])
+        history['Date'] = pd.to_datetime(history['date'])
+        history = history.rename(columns={
+            'open': 'Open',
+            'high': 'High',
+            'low': 'Low',
+            'close': 'Close',
+            'volume': 'Volume'
+        })
+        history = history[['Date', 'Open', 'High', 'Low', 'Close']]
+        history = history.set_index('Date').sort_index()
         set_upper = lambda row: row["Close"] if row["Close"] >= row["Open"] else row["Open"]
         set_lower = lambda row: row["Close"] if row["Close"] < row["Open"] else row["Open"]
         history["Upper"] = history.apply(set_upper, axis=1)
@@ -52,11 +81,8 @@ class stockData:
         history["Spread"] = history["High"] - history["Low"]
         history["Gap"] = np.log(history["Open"] / history["Close"].shift(1))
         history["Total Return"] = np.cumsum(history["Log Return"])
-        #history.index = history.index.date
         history.dropna(inplace=True)
-        history.drop(columns=["Dividends", "Stock Splits", "Volume"], inplace=True)
         self.symbol = symbol
-        #self.period = period
         self.start = start
         self.end = end
         self.interval = interval
@@ -70,7 +96,6 @@ class stockData:
             print("No data to analyze.")
         else:
             calculations = self.history.copy()
-            #calculations["Rolling Vol"] = calculations["Log Return"].rolling(window=days).std()
             calculations["Normal Open"] = np.log(
                 calculations["Open"] / calculations["Close"].shift(1)
             )
@@ -88,25 +113,25 @@ class stockData:
             calculations["RS Var"] = (calculations["Normal High"]*(calculations["Normal High"] - calculations["Normal Close"]) + calculations["Normal Low"]*(calculations["Normal Low"] - calculations["Normal Close"])).rolling(window=days).mean()
             k = 0.34 / (1.34 + ((days+1)/(days-1)))
             calculations["YZ Var"] = calculations["Normal Open Var"] + k*calculations["Normal Close Var"] + (1-k)*calculations["RS Var"]
-    #        calculations["Rolling Mean"] = calculations["Log Return"].rolling(window=days).mean()
             calculations["Trend t-stat"] = calculations["Log Return"].rolling(window=days).apply(ols_slope_t, raw=True)
-            quantiles = calculations["YZ Var"].quantile([0.25,0.9]).values
+            trend_quantiles = calculations["Trend t-stat"].quantile([0.5]).values
+            low_trend_quantiles = calculations[calculations["Trend t-stat"] < trend_quantiles[0]]["YZ Var"].quantile([0.3,0.6]).values
+            high_trend_quantiles = calculations[calculations["Trend t-stat"] >= trend_quantiles[0]]["YZ Var"].quantile([0.3,0.6]).values
             def separator(row):
                 vol = row["YZ Var"]
                 mean = row["Trend t-stat"]
-                if vol < quantiles[0]:
-                    if mean < 0:
+                if mean < trend_quantiles[0]:
+                    if vol < low_trend_quantiles[0]:
                         return 4
-                    else:
-                        return 3
-                elif vol < quantiles[1]:
-                    if mean < 0:
+                    elif vol < low_trend_quantiles[1]:
                         return 5
                     else:
-                        return 2
-                else:
-                    if mean < 0:
                         return 6
+                else:
+                    if vol < high_trend_quantiles[0]:
+                        return 3
+                    elif vol < high_trend_quantiles[1]:
+                        return 2
                     else:
                         return 1
             calculations["State"] = calculations.apply(separator, axis=1)

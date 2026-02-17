@@ -1,10 +1,18 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import numpy as np
+from pathlib import Path
+import os
+import certifi
+from dotenv import dotenv_values
 from src.engine import stockData
 from src.visuals import stockPlots
 from datetime import datetime
 from datetime import timedelta
+from warnings import filterwarnings
+filterwarnings("ignore")
+config = dotenv_values(".env", encoding="utf-8-sig")
+api_key = config["MARKETSTACK_KEY"]
 
 st.set_page_config(page_title="Contenuix | Stock Analytics", layout="wide")
 st.markdown("""
@@ -26,7 +34,7 @@ with st.sidebar:
         submit_button = st.form_submit_button("Simulate")
 
 if submit_button:
-    stock = stockData()
+    stock = stockData(api_key=api_key)
     stock.ticker_data(symbol=symbol, start=start_date, end=end_date)
     stock.markov_states(days=window)
     stock.monte_carlo(days=window)
@@ -105,12 +113,16 @@ if submit_button:
         """, height=330)
     st.markdown("### Summary Metrics")
     st.markdown("---")
+    S0 = stock.history["Close"].iloc[-1]
     final_prices = np.array(stock.pred_price_runs)[:, -1]
-    pop = (final_prices > stock.history["Close"].iloc[-1]).mean()
-    var_95 = np.log(np.percentile(final_prices, 5) / stock.history["Close"].iloc[-1])
+    returns = final_prices / S0 - 1
+    pop = (returns > 0).mean()
+    avg_gain = returns[returns > 0].mean()
+    avg_loss = returns[returns < 0].mean()
     col1, col2, col3 = st.columns(3)
-    col1.metric("Prob. of Profit", f"{pop:.2%}")
-    col2.metric("95% VaR (%)", f"{var_95:.2%}")
-    col3.metric("Expected Return", f"{stock.drift:.2%}")
+    col1.metric("Probability of Profit", f"{pop:.2%}")
+    col2.metric("Average Gain (Given Profit)", f"{avg_gain:.2%}")
+    col3.metric("Average Loss (Given Loss)", f"{abs(avg_loss):.2%}")
+
 else:
     st.info("Enter a ticker symbol in the sidebar and click 'Simulate' to begin.")
