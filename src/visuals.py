@@ -100,35 +100,80 @@ class stockPlots:
             return fig
         else:
             print("No data to analyze.")
+    # def plot_simulation(self):
+    #     if self.stock.has_pred:
+    #         fig, axes = plt.subplots(figsize=figsize, dpi=300)
+    #         expected_value = np.mean(self.stock.pred_price_runs, axis=0)
+    #         for idx, run in enumerate(self.stock.pred_price_runs):
+    #             for state, color in colors.items():
+    #                 masked_price = np.where(
+    #                     np.array(self.stock.pred_state_runs[idx]) == state,
+    #                     np.array(run),
+    #                     np.nan
+    #                 )
+    #                 axes.plot(
+    #                     np.arange(len(run)),
+    #                     masked_price,
+    #                     color=color,
+    #                     linewidth=0.8,
+    #                     alpha=0.5,
+    #                 )
+    #         axes.plot(
+    #             np.arange(len(self.stock.pred_price_runs[0])),
+    #             expected_value,
+    #             linewidth=2,
+    #             color='white',
+    #         )
+    #         axes.spines['top'].set_visible(False)
+    #         axes.spines['right'].set_visible(False)
+    #         axes.xaxis.set_visible(False)
+    #         axes.grid(visible=True, axis='y')
+    #         axes.set_ylabel("Price (USD)")
+    #         return fig
+    #     else:
+    #         print("No Markov states to make predictions.")
     def plot_simulation(self):
-        if self.stock.has_pred:
-            fig, axes = plt.subplots(figsize=figsize, dpi=300)
-            expected_value = np.mean(self.stock.pred_price_runs, axis=0)
-            for idx, run in enumerate(self.stock.pred_price_runs):
-                for state, color in colors.items():
-                    masked_price = np.where(
-                        np.array(self.stock.pred_state_runs[idx]) == state,
-                        np.array(run),
-                        np.nan
-                    )
-                    axes.plot(
-                        np.arange(len(run)),
-                        masked_price,
-                        color=color,
-                        linewidth=0.8,
-                        alpha=0.5,
-                    )
-            axes.plot(
-                np.arange(len(self.stock.pred_price_runs[0])),
-                expected_value,
-                linewidth=2,
-                color='white',
-            )
-            axes.spines['top'].set_visible(False)
-            axes.spines['right'].set_visible(False)
-            axes.xaxis.set_visible(False)
-            axes.grid(visible=True, axis='y')
-            axes.set_ylabel("Price (USD)")
-            return fig
-        else:
+        if not self.stock.has_pred:
             print("No Markov states to make predictions.")
+            return
+        fig, axes = plt.subplots(figsize=figsize, dpi=100)
+        runs = np.array(self.stock.pred_price_runs)  # shape: (n_runs, n_points)
+        lower = np.percentile(runs, 5, axis=0)
+        upper = np.percentile(runs, 95, axis=0)
+        expected_value = np.mean(runs, axis=0)
+        axes.plot(
+            np.arange(runs.shape[1]),
+            upper,
+            color='green',
+            linewidth=2,
+            label='Lower'
+        )
+        axes.plot(
+            np.arange(runs.shape[1]),
+            lower,
+            color='red',
+            linewidth=2,
+            label='Lower'
+        )
+        axes.fill_between(
+            np.arange(runs.shape[1]),
+            lower,
+            upper,
+            color='black',  # choose whatever you like
+            alpha=0.2     # semi-transparent
+        )
+        axes.plot(
+            np.arange(runs.shape[1]),
+            expected_value,
+            color='black',
+            linewidth=2,
+            linestyle='--',
+            label='Expected'
+        )
+        axes.spines['top'].set_visible(False)
+        axes.spines['right'].set_visible(False)
+        axes.xaxis.set_visible(False)
+        axes.grid(visible=True, axis='y')
+        axes.set_ylabel("Price (USD)")
+        axes.legend()
+        return fig

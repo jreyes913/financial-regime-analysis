@@ -3,6 +3,8 @@ import numpy as np
 from datetime import datetime
 from datetime import timedelta
 import httpx
+import requests
+import time
 
 def ols_slope_t(y_window):
     n = len(y_window)
@@ -19,6 +21,7 @@ def ols_slope_t(y_window):
 class stockData:
     def __init__(self, api_key):
         self.api_key = api_key
+        self.session = None
         self.symbol = None
         self.start = None
         self.end = None
@@ -35,10 +38,15 @@ class stockData:
         self.volatility = None
         self.has_pred = False
         self.days = None
+    def __enter__(self):
+        self.session = requests.Session()
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        if self.session is not None:
+            self.session.close()
     def ticker_data(
             self,
             symbol: str = "AAPL",
-            interval: str = "1d",
             start: datetime = datetime.today() - timedelta(days=365.25*5),
             end: datetime = datetime.today(),
             limit: int = 1500
@@ -50,26 +58,19 @@ class stockData:
         params = {
             "access_key": key,
             "symbols": symbol,
-            "exchange": "XNAS", 
             "date_from": start_date,
             "date_to": end_date,
             "sort": "ASC",
-            "limit": limit  # API hard limit per request is 1000.[3]
+            "limit": limit
         }
         all_data = []
         offset = 0
-        with httpx.Client(http2=False, timeout=15.0) as client:
-            while True:
-                params["offset"] = offset
-                r = client.get(base_url, params=params)
-                r.raise_for_status()
-                response_json = r.json()
-                batch_data = response_json.get("data",)
-                all_data.extend(batch_data)
-                total_available = response_json["pagination"]["total"]
-                offset += len(batch_data)
-                if offset >= total_available or offset >= limit:
-                    break
+        params["offset"] = offset
+        r = self.session.get(base_url, params=params, timeout=15)
+        response_json = r.json()
+        batch_data = response_json.get("data",)
+        all_data.extend(batch_data)
+        total_available = response_json["pagination"]["total"]
         history = pd.json_normalize(all_data)
         history['Date'] = pd.to_datetime(history['date'])
         history['date'] = pd.to_datetime(history['date'])
@@ -102,7 +103,6 @@ class stockData:
         self.symbol = symbol
         self.start = start
         self.end = end
-        self.interval = interval
         self.history = history
         self.has_data = True
     def markov_states(
