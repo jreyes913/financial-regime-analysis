@@ -31,6 +31,8 @@ class StockData:
         self.volatility = None
         self.has_pred = False
         self.days = None
+        self.beta = None
+        self.alpha = None
     def transform_data(
             self,
             symbol: str = "AAPL",
@@ -196,3 +198,21 @@ class StockData:
             self.simulation_metrics()
         else:
             print("No Markov states to make predictions.")
+    def compute_capm_metrics(
+            self,
+            benchmark_df: pd.DataFrame= pd.DataFrame()
+            ):
+        if not self.has_data:
+            print("No data to analyze.")
+        else:
+            df = self.history[['Log Return']].merge(
+            benchmark_df[['Log Return']],
+            left_index=True,
+            right_index=True,
+            how='inner',
+            suffixes=(f'_{self.symbol}', '_SPY')
+            )
+            df.columns = [self.symbol, 'SPY']
+            beta, alpha = np.polyfit(df["SPY"], df[self.symbol], 1)
+            self.beta = beta
+            self.alpha = alpha

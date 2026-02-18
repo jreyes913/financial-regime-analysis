@@ -101,38 +101,6 @@ class StockPlots:
             return fig
         else:
             print("No data to analyze.")
-    # def plot_simulation(self):
-    #     if self.stock.has_pred:
-    #         fig, axes = plt.subplots(figsize=figsize, dpi=300)
-    #         expected_value = np.mean(self.stock.pred_price_runs, axis=0)
-    #         for idx, run in enumerate(self.stock.pred_price_runs):
-    #             for state, color in colors.items():
-    #                 masked_price = np.where(
-    #                     np.array(self.stock.pred_state_runs[idx]) == state,
-    #                     np.array(run),
-    #                     np.nan
-    #                 )
-    #                 axes.plot(
-    #                     np.arange(len(run)),
-    #                     masked_price,
-    #                     color=color,
-    #                     linewidth=0.8,
-    #                     alpha=0.5,
-    #                 )
-    #         axes.plot(
-    #             np.arange(len(self.stock.pred_price_runs[0])),
-    #             expected_value,
-    #             linewidth=2,
-    #             color='white',
-    #         )
-    #         axes.spines['top'].set_visible(False)
-    #         axes.spines['right'].set_visible(False)
-    #         axes.xaxis.set_visible(False)
-    #         axes.grid(visible=True, axis='y')
-    #         axes.set_ylabel("Price (USD)")
-    #         return fig
-    #     else:
-    #         print("No Markov states to make predictions.")
     def plot_simulation(self):
         if not self.stock.has_pred:
             print("No Markov states to make predictions.")
