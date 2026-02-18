@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import mplfinance as mpf
 import numpy as np
-from .engine import stockData
+from .engine import StockData
 import pandas as pd
 
 streamlit_light = {
@@ -55,11 +55,12 @@ def format_mpf_axis(ax, df):
     ax.spines['right'].set_visible(False)
     plt.setp(ax.get_xticklabels(), rotation=0)
 
-class stockPlots:
-    def __init__(self, stock: stockData):
+class StockPlots:
+    def __init__(self, stock: StockData):
         self.stock = stock
     def plot_historical_price(self):
         fig, axes = plt.subplots(figsize=figsize, dpi=300)
+        
         mpf.plot(
             self.stock.history,
             type='candle',

@@ -1,10 +1,5 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
-from datetime import timedelta
-import httpx
-import requests
-import time
 
 def ols_slope_t(y_window):
     n = len(y_window)
@@ -18,10 +13,8 @@ def ols_slope_t(y_window):
     se_beta = np.sqrt(s_squared / denominator)
     return beta / se_beta
 
-class stockData:
-    def __init__(self, api_key):
-        self.api_key = api_key
-        self.session = None
+class StockData:
+    def __init__(self):
         self.symbol = None
         self.start = None
         self.end = None
@@ -38,40 +31,12 @@ class stockData:
         self.volatility = None
         self.has_pred = False
         self.days = None
-    def __enter__(self):
-        self.session = requests.Session()
-        return self
-    def __exit__(self, exc_type, exc, tb):
-        if self.session is not None:
-            self.session.close()
-    def ticker_data(
+    def transform_data(
             self,
             symbol: str = "AAPL",
-            start: datetime = datetime.today() - timedelta(days=365.25*5),
-            end: datetime = datetime.today(),
-            limit: int = 1500
+            raw_history: pd.DataFrame = pd.DataFrame()
     ):
-        key = self.api_key
-        base_url = "https://api.marketstack.com/v2/eod"
-        start_date = start.strftime(format="%Y-%m-%d")
-        end_date = end.strftime(format="%Y-%m-%d")
-        params = {
-            "access_key": key,
-            "symbols": symbol,
-            "date_from": start_date,
-            "date_to": end_date,
-            "sort": "ASC",
-            "limit": limit
-        }
-        all_data = []
-        offset = 0
-        params["offset"] = offset
-        r = self.session.get(base_url, params=params, timeout=15)
-        response_json = r.json()
-        batch_data = response_json.get("data",)
-        all_data.extend(batch_data)
-        total_available = response_json["pagination"]["total"]
-        history = pd.json_normalize(all_data)
+        history = raw_history.copy()
         history['Date'] = pd.to_datetime(history['date'])
         history['date'] = pd.to_datetime(history['date'])
         history = history.sort_values('date', ascending=False).reset_index(drop=True)
@@ -101,10 +66,32 @@ class stockData:
         history["Total Return"] = np.cumsum(history["Log Return"])
         history.dropna(inplace=True)
         self.symbol = symbol
-        self.start = start
-        self.end = end
         self.history = history
         self.has_data = True
+        return self.history
+    def simulation_metrics(self):
+        if not self.has_pred:
+            print("No Monte Carlo results available.")
+            return None
+        S0 = self.history["Close"].iloc[-1]
+        final_prices = np.array(self.pred_price_runs)[:, -1]
+        returns = final_prices / S0 - 1
+        pop = (returns > 0).mean()
+        gains = returns[returns > 0]
+        losses = returns[returns < 0]
+        avg_gain = gains.mean() if gains.size > 0 else 0.0
+        avg_loss = losses.mean() if losses.size > 0 else 0.0
+        expected_return = returns.mean()
+        self.sim_pop = pop
+        self.sim_avg_gain = avg_gain
+        self.sim_avg_loss = avg_loss
+        self.sim_expected_return = expected_return
+        return {
+            "probability_of_profit": pop,
+            "average_gain": avg_gain,
+            "average_loss": avg_loss,
+            "expected_return": expected_return
+        }
     def markov_states(
             self,
             days:int=63
@@ -206,5 +193,6 @@ class stockData:
             self.drift = self.history["Log Return"].mean() * days
             self.volatility = self.history['Log Return'].std() * np.sqrt(days)
             self.has_pred = True
+            self.simulation_metrics()
         else:
             print("No Markov states to make predictions.")

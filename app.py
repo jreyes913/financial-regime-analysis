@@ -2,15 +2,16 @@ import streamlit as st
 import streamlit.components.v1 as components
 import numpy as np
 from dotenv import dotenv_values
-from src.engine import stockData
-from src.visuals import stockPlots
+from src.engine import StockData
+from src.visuals import StockPlots
+from src.data_loader import DataLoader
 from datetime import datetime
 from datetime import timedelta
 from warnings import filterwarnings
 filterwarnings("ignore")
 config = dotenv_values(".env", encoding="utf-8-sig")
 api_key = config["MARKETSTACK_KEY"]
-with stockData(api_key=api_key) as data:
+with DataLoader(api_key=api_key) as loader:
     st.set_page_config(page_title="Contenuix | Stock Analytics", layout="wide")
     st.markdown("""
     <style>
@@ -31,10 +32,12 @@ with stockData(api_key=api_key) as data:
             submit_button = st.form_submit_button("Simulate")
 
     if submit_button:
-        data.ticker_data(symbol=symbol, start=start_date, end=end_date)
+        data = StockData()
+        raw_history = loader.load_ticker(symbol=symbol,start=start_date, end=end_date)
+        data.transform_data(symbol=symbol, raw_history=raw_history)
         data.markov_states(days=window)
         data.monte_carlo(days=window)
-        plots = stockPlots(data)
+        plots = StockPlots(data)
         fig1 = plots.plot_markov_states()
         fig2 = plots.plot_historical_price()
         fig3 = plots.plot_simulation()
@@ -109,22 +112,13 @@ with stockData(api_key=api_key) as data:
             """, height=330)
         st.markdown("### Summary Metrics")
         st.markdown("---")
-        S0 = data.history["Close"].iloc[-1]
-        final_prices = np.array(data.pred_price_runs)[:, -1]
-        returns = final_prices / S0 - 1
-        pop = (returns > 0).mean()
-        avg_gain = returns[returns > 0].mean() if (returns > 0).any() else 0
-        avg_loss = returns[returns < 0].mean() if (returns < 0).any() else 0
-        expected_return = returns.mean()
+
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Probability of Profit", f"{pop:.2%}")
-        col2.metric("Average Gain", f"{avg_gain:.2%}")
-        col3.metric("Average Loss", f"{abs(avg_loss):.2%}")
-        delta_color = "normal"
-        col4.metric(
-            "Expected Return",
-            f"{expected_return:.2%}"
-        )
+
+        col1.metric("Probability of Profit", f"{data.sim_pop:.2%}")
+        col2.metric("Average Gain", f"{data.sim_avg_gain:.2%}")
+        col3.metric("Average Loss", f"{abs(data.sim_avg_loss):.2%}")
+        col4.metric("Expected Return", f"{data.sim_expected_return:.2%}")
 
     else:
         st.info("Enter a ticker symbol in the sidebar and click 'Simulate' to begin.")
