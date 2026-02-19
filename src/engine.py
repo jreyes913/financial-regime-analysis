@@ -33,6 +33,8 @@ class StockData:
         self.days = None
         self.beta = None
         self.alpha = None
+        self.capm_df = None
+        self.has_capm = False
     def transform_data(
             self,
             symbol: str = "AAPL",
@@ -158,8 +160,16 @@ class StockData:
             calculations_states.index = calculations_states['State']
             calculations_states.drop(columns=['mean', 'std', 'State'], inplace=True)
             calculations.dropna(inplace=True)
+            tm = pd.DataFrame(
+                    transition_matrix,
+                    index=[f"{i}" for i in range(1,7)],
+                    columns=[f"{i}" for i in range(1,7)]
+            )
+            tm.reset_index(inplace=True)
+            tm.rename(columns={'index':'S'}, inplace=True)
             self.calculations_states = calculations_states
             self.transition_matrix = transition_matrix
+            self.tm = tm
             self.days = days
             self.calculations = calculations
             self.has_states = True
@@ -216,3 +226,5 @@ class StockData:
             beta, alpha = np.polyfit(df["SPY"], df[self.symbol], 1)
             self.beta = beta
             self.alpha = alpha
+            self.capm_df = df
+            self.has_capm = True

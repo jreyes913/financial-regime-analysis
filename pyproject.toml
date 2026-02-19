@@ -7,6 +7,8 @@ requires-python = ">=3.12"
 dependencies = [
     "altair<5",
     "certifi>=2026.1.4",
+    "dash>=4.0.0",
+    "dash-mantine-components>=2.6.0",
     "httpx[http2]>=0.28.1",
     "loguru>=0.7.3",
     "lxml>=6.0.2",
@@ -14,6 +16,7 @@ dependencies = [
     "mplfinance>=0.12.10b0",
     "numpy>=2.4.2",
     "pandas>=3.0.0",
+    "plotly>=6.5.2",
     "pydotenv>=0.0.7",
     "python-certifi-win32>=1.6.1",
     "streamlit>=1.19.0",
