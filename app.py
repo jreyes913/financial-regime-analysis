@@ -50,10 +50,10 @@ FONT_MONO = "'Space Mono', monospace"
 # =========================
 state_colors = {
     1: "#14532D",
-    2: "#16A34A",
+    2: ACCENT_GREEN,
     3: "#BBF7D0",
     4: "#FECACA",
-    5: "#DC2626",
+    5: ACCENT_RED,
     6: "#7F1D1D"
 }
 
@@ -413,14 +413,18 @@ app.layout = dmc.MantineProvider(
                 ),
 
                 # ---- MAIN CONTENT ----
-                html.Div(
-                    id="main-content",
-                    style={
-                        "flex": 1,
-                        "padding": "1.2vh 1.2vw",
-                        "overflow": "hidden",
-                    },
-                ),
+                dcc.Loading(
+                    html.Div(
+                        id="main-content",
+                        style={
+                            "flex": 1,
+                            "padding": "1.2vh 1.2vw",
+                            "overflow": "hidden",
+                        },
+                    ),
+                    color=ACCENT_GREEN,
+                    type="circle",  # or "dot", "default"
+                )
             ],
             style={
                 "background": DARK_BG,
@@ -586,12 +590,12 @@ def run_sim(n, symbol, window, start, end):
                     panel("GBM Parameters",         stat_block([
                         ("DRIFT (μ)",     f"{data.drift:.4%}",      ACCENT_GREEN),
                         ("VOLATILITY (σ)",f"{data.volatility:.4%}", ACCENT_CYAN),
-                        ("HORIZON",       f"{data.days} days",      TEXT_PRIMARY),
+                        ("HORIZON",       f"{int(data.days/3)} days",      TEXT_PRIMARY),
                     ])),
-                    panel("Greeks / Factor Chart",  dcc.Graph(figure=fig_greek, style={"flex": 1}, config={"displayModeBar": False}), flex=2),
+                    panel("Factor Chart",  dcc.Graph(figure=fig_greek, style={"flex": 1}, config={"displayModeBar": False}), flex=2),
                     panel("CAPM Metrics",           stat_block([
-                        ("ALPHA (α)", f"{data.alpha:.4f}", ACCENT_GREEN if data.alpha > 0 else ACCENT_RED),
-                        ("BETA (β)",  f"{data.beta:.4f}",  ACCENT_CYAN),
+                        ("ALPHA (α)", f"{data.alpha:.8f}", ACCENT_GREEN if data.alpha > 0 else ACCENT_RED),
+                        ("BETA (β)",  f"{data.beta:.8f}",  ACCENT_CYAN),
                         ("VS BENCHMARK", "SPY",            TEXT_MUTED),
                     ])),
                 ],
@@ -617,4 +621,4 @@ def run_sim(n, symbol, window, start, end):
 # RUN
 # =========================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)

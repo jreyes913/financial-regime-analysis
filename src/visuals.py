@@ -1,12 +1,27 @@
 import plotly.graph_objects as go
 import numpy as np
 
+# =========================
+# DESIGN TOKENS
+# =========================
+DARK_BG = "#050A0E"
+PANEL_BG = "#0C1318"
+PANEL_BORDER = "#1A2530"
+ACCENT_GREEN = "#00FFA3"
+ACCENT_CYAN = "#00D4FF"
+ACCENT_RED = "#FF4D6A"
+TEXT_PRIMARY = "#E8F4F8"
+TEXT_MUTED = "#4A6572"
+TEXT_DIM = "#243540"
+FONT_DISPLAY = "Syne, sans-serif"
+FONT_MONO = "'Space Mono', monospace"
+
 colors = {
     1: "#14532D",
-    2: "#16A34A",
+    2: ACCENT_GREEN,
     3: "#BBF7D0",
     4: "#FECACA",
-    5: "#DC2626",
+    5: ACCENT_RED,
     6: "#7F1D1D"
 }
 
@@ -30,8 +45,8 @@ class StockPlots:
                     high=df["High"],
                     low=df["Low"],
                     close=df["Close"],
-                    increasing_line_color="#16A34A",
-                    decreasing_line_color="#DC2626",
+                    increasing_line_color=ACCENT_GREEN,
+                    decreasing_line_color=ACCENT_RED,
                     showlegend=False,
                 )
             ]
@@ -105,7 +120,7 @@ class StockPlots:
             go.Scatter(
                 x=x,
                 y=upper,
-                line=dict(color="green"),
+                line=dict(color=ACCENT_GREEN),
                 name="95th percentile",
             )
         )
@@ -116,7 +131,7 @@ class StockPlots:
                 x=x,
                 y=lower,
                 fill="tonexty",
-                line=dict(color="red"),
+                line=dict(color=ACCENT_RED),
                 name="5th percentile",
                 fillcolor="rgba(255,255,255,0.15)",
             )
@@ -127,7 +142,7 @@ class StockPlots:
             go.Scatter(
                 x=x,
                 y=expected,
-                line=dict(color="white", dash="dash", width=1),
+                line=dict(color=TEXT_PRIMARY, dash="dash", width=1),
                 name="Expected",
             )
         )
@@ -164,6 +179,7 @@ class StockPlots:
                 mode="markers",
                 name="Returns",
                 opacity=0.6,
+                marker=dict(color=ACCENT_CYAN)
             )
         )
 
@@ -172,7 +188,8 @@ class StockPlots:
             go.Scatter(
                 x=x_line,
                 y=y_line,
-                mode="lines"
+                mode="lines",
+                marker=dict(color=TEXT_PRIMARY)
             )
         )
 

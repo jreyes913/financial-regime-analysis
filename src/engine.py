@@ -179,6 +179,7 @@ class StockData:
             num_runs:int=int(2e4)
     ):
         if self.has_states:
+            days = int(days/3)
             start_price = self.history['Close'].iloc[-1]
             prices = np.zeros((days, num_runs))
             states = np.zeros((days, num_runs), dtype=int)
@@ -202,8 +203,10 @@ class StockData:
 
             self.pred_price_runs = prices.T.tolist()
             self.pred_state_runs = states.T.tolist()
-            self.drift = self.history["Log Return"].mean() * days
-            self.volatility = self.history['Log Return'].std() * np.sqrt(days)
+            final_prices = prices[-1, :]
+            sim_log_returns = np.log(final_prices / start_price)
+            self.drift = sim_log_returns.mean()
+            self.volatility = sim_log_returns.std()
             self.has_pred = True
             self.simulation_metrics()
         else:
