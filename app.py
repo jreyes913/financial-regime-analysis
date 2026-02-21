@@ -9,6 +9,7 @@ import dash_mantine_components as dmc
 from src.engine import StockData
 from src.visuals import StockPlots
 from src.data_loader import DataLoader
+from src.summary import stockSummary
 
 filterwarnings("ignore")
 
@@ -508,6 +509,31 @@ def run_sim(n, symbol, window, start, end):
         fig_sim    = dark_fig(plots.plot_simulation())
         fig_greek  = dark_fig(plots.plot_greek())
 
+        summary = {
+            "fundamentals": {
+                "ticker": symbol,
+            },
+            "capm": {
+                "alpha": data.alpha,
+                "beta": data.beta,
+            },
+            "simulation_parameters": {
+                "mu": data.drift,
+                "sigma": data.volatility,
+                "rolling_window" : data.days,
+                "forecast_horizon_days": int(data.days/3),
+            },
+            "key_metrics": {
+                "probability_of_profit": data.sim_pop,
+                "average_gain": data.sim_avg_gain,
+                "average_loss": data.sim_avg_loss,
+                "expected_return": data.sim_expected_return,
+            }
+        }
+
+        data_summary = stockSummary(summary=summary)
+        data_summary.generate_summary()
+
     pop_color = ACCENT_GREEN if data.sim_pop > 0.5 else ACCENT_RED
     exp_color = ACCENT_GREEN if data.sim_expected_return > 0 else ACCENT_RED
 
@@ -547,13 +573,35 @@ def run_sim(n, symbol, window, start, end):
 
     return html.Div(
         [
-            # Symbol header
+            # Symbol header + summary row
             html.Div(
                 [
-                    html.Span(symbol.upper(), style={"fontFamily": FONT_DISPLAY, "fontSize": "1.1vw", "fontWeight": 800, "color": ACCENT_GREEN, "letterSpacing": "0.05em"}),
-                    html.Span(" / COMPREHENSIVE ANALYSIS", style={"fontFamily": FONT_MONO, "fontSize": "0.6vw", "color": TEXT_MUTED, "letterSpacing": "0.15em", "marginLeft": "0.5vw"}),
+                    # Left: symbol title
+                    html.Div(
+                        [
+                            html.Span(symbol.upper(), style={"fontFamily": FONT_DISPLAY, "fontSize": "1.1vw", "fontWeight": 800, "color": ACCENT_GREEN, "letterSpacing": "0.05em"}),
+                            html.Span(" / COMPREHENSIVE ANALYSIS", style={"fontFamily": FONT_MONO, "fontSize": "0.6vw", "color": TEXT_MUTED, "letterSpacing": "0.15em", "marginLeft": "0.5vw"}),
+                        ],
+                        style={"display": "flex", "alignItems": "center", "flexShrink": 0},
+                    ),
+                    # Right: AI summary (wraps to more lines if long)
+                    html.Div(
+                        data_summary.message,
+                        style={
+                            "fontFamily": FONT_DISPLAY,
+                            "fontSize": "0.8vw",
+                            "color": TEXT_PRIMARY,
+                            "lineHeight": "1.4",
+                            "padding": "0.4vh 1vw",
+                            "borderLeft": f"2px solid {PANEL_BORDER}",
+                            "marginLeft": "1.5vw",
+                            "flex": 1,
+                            "whiteSpace": "normal",
+                            "wordBreak": "break-word",
+                        },
+                    ),
                 ],
-                style={"marginBottom": "1vh"},
+                style={"display": "flex", "alignItems": "center", "marginBottom": "1vh"},
             ),
 
             # Row 1
