@@ -17,14 +17,13 @@ FONT_DISPLAY = "Syne, sans-serif"
 FONT_MONO = "'Space Mono', monospace"
 
 colors = {
-    1: "#14532D",
-    2: ACCENT_GREEN,
-    3: "#BBF7D0",
-    4: "#FECACA",
-    5: ACCENT_RED,
-    6: "#7F1D1D"
+    1: ACCENT_RED,
+    2: ACCENT_CYAN,
+    3: ACCENT_GREEN,
+    4: "#FF8C42",   # warm amber — high vol bear
+    5: TEXT_MUTED,  # muted slate — high vol neutral
+    6: "#7B61FF",   # cool violet — high vol bull
 }
-
 
 class StockPlots:
     def __init__(self, stock):
@@ -61,39 +60,36 @@ class StockPlots:
         )
 
         return fig
-
-    # =========================
-    # Markov State Overlay
-    # =========================
+    
     def plot_markov_states(self):
-
         if not self.stock.has_states:
             return go.Figure()
 
         df = self.stock.calculations
 
+        state_labels = {
+            1: "Bear + Low Vol",
+            2: "Neutral + Low Vol",
+            3: "Bull + Low Vol",
+            4: "Bear + High Vol",
+            5: "Neutral + High Vol",
+            6: "Bull + High Vol",
+        }
+
         fig = go.Figure()
 
         for state, color in colors.items():
-
-            masked = np.where(df["State"] == state, df["Close"], np.nan)
-
+            masked = np.where(df["Regime State"] == state, df["Close"], np.nan)
             fig.add_trace(
                 go.Scatter(
                     x=df.index,
                     y=masked,
                     mode="lines",
+                    name=state_labels[state],
                     line=dict(color=color, width=2),
-                    showlegend=False,
+                    showlegend=True,
                 )
             )
-
-        fig.update_layout(
-            #height=350,
-            yaxis_title="",
-            template="plotly_white",
-            margin=dict(l=40, r=20, t=20, b=20),
-        )
 
         return fig
 

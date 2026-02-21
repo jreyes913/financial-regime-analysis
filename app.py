@@ -50,21 +50,21 @@ FONT_MONO = "'Space Mono', monospace"
 # STATE COLORS / LABELS
 # =========================
 state_colors = {
-    1: "#14532D",
-    2: ACCENT_GREEN,
-    3: "#BBF7D0",
-    4: "#FECACA",
-    5: ACCENT_RED,
-    6: "#7F1D1D"
+    1: ACCENT_RED,
+    2: ACCENT_CYAN,
+    3: ACCENT_GREEN,
+    4: "#FF8C42",
+    5: TEXT_MUTED,
+    6: "#7B61FF",
 }
 
 state_labels = {
-    1: "High Vol Bull",
-    2: "Mid Vol Bull",
-    3: "Low Vol Bull",
-    4: "Low Vol Bear",
-    5: "Mid Vol Bear",
-    6: "High Vol Bear",
+    1: "Bear + Low Vol",
+    2: "Neutral + Low Vol",
+    3: "Bull + Low Vol",
+    4: "Bear + High Vol",
+    5: "Neutral + High Vol",
+    6: "Bull + High Vol",
 }
 
 
@@ -133,41 +133,6 @@ def legend_pill(color, label, number):
         ],
         style={"display": "flex", "alignItems": "center", "marginBottom": "2.35vh"},
     )
-
-
-legend_div = html.Div(
-    [
-        html.Div(
-            "REGIME LEGEND",
-            style={
-                "fontSize": "0.6vw",
-                "color": TEXT_MUTED,
-                "letterSpacing": "0.15em",
-                "fontFamily": FONT_MONO,
-                "marginBottom": "1.2vh",
-            },
-        ),
-        html.Div(
-            [legend_pill(state_colors[i], state_labels[i], i) for i in range(1, 7)],
-            style={
-                "display": "flex",
-                "flexDirection": "column",
-                "justifyContent": "space-between",
-                "flex": 1,
-            },
-        ),
-    ],
-    style={
-        "flex": 1,
-        "padding": "1.2vh 1.2vw",
-        "background": PANEL_BG,
-        "borderRadius": "6px",
-        "border": f"1px solid {PANEL_BORDER}",
-        "display": "flex",
-        "flexDirection": "column",
-    },
-)
-
 
 def panel(title, children, flex=1, extra_style=None):
     s = {
@@ -249,6 +214,21 @@ def labeled_date_picker(label, picker_id, date_value):
         ]
     )
 
+def _tm_table(df, cell_style, header_style):
+    return html.Div(
+        dash_table.DataTable(
+            data=df.to_dict("records"),
+            columns=[
+                dict(name=i, id=i, format=percentage, type="numeric") if i != "" else dict(name=i, id=i)
+                for i in df.columns
+            ],
+            style_table={"width": "100%", "overflowX": "hidden", "background": PANEL_BG},
+            style_cell=cell_style,
+            style_header=header_style,
+            style_data={"border": f"1px solid {PANEL_BORDER}"},
+        ),
+        style={"padding": "0.5vh 0.5vw"},
+    )
 
 # =========================
 # LAYOUT
@@ -510,27 +490,18 @@ def run_sim(n, symbol, window, start, end):
         fig_greek  = dark_fig(plots.plot_greek())
 
         summary = {
-            "fundamentals": {
-                "ticker": symbol,
-            },
-            "capm": {
-                "alpha": data.alpha,
-                "beta": data.beta,
-            },
-            "simulation_parameters": {
-                "mu": data.drift,
-                "sigma": data.volatility,
-                "rolling_window" : data.days,
-                "forecast_horizon_days": int(data.days/3),
-            },
-            "key_metrics": {
-                "probability_of_profit": data.sim_pop,
-                "average_gain": data.sim_avg_gain,
-                "average_loss": data.sim_avg_loss,
-                "expected_return": data.sim_expected_return,
-            }
+            "ticker": symbol,
+            "horizon_days": int(data.days / 3),
+            "rolling_window": data.days,
+            "drift": data.drift,
+            "volatility": data.volatility,
+            "alpha": data.alpha,
+            "beta": data.beta,
+            "probability_of_profit": data.sim_pop,
+            "average_gain": data.sim_avg_gain,
+            "average_loss": data.sim_avg_loss,
+            "expected_return": data.sim_expected_return,
         }
-
         data_summary = stockSummary(summary=summary)
         data_summary.generate_summary()
 
@@ -609,24 +580,52 @@ def run_sim(n, symbol, window, start, end):
                 [
                     panel("Historical Price",      dcc.Graph(figure=fig_price,  style={"flex": 1.3}, config={"displayModeBar": False})),
                     panel("Markov Regime States",  dcc.Graph(figure=fig_states, style={"flex": 1.3}, config={"displayModeBar": False})),
-                    panel("State Transition Matrix",
-                        html.Div(
-                            dash_table.DataTable(
-                                data=data.tm.to_dict("records"),
-                                columns=[
-                                    dict(name=i, id=i, format=percentage, type="numeric") if i != "S" else dict(name=i, id=i)
-                                    for i in data.tm.columns
-                                ],
-                                style_table={"width": "100%", "overflowX": "hidden", "background": PANEL_BG},
-                                style_cell=table_style_cell,
-                                style_header=table_style_header,
-                                style_data={"border": f"1px solid {PANEL_BORDER}"},
-                                fixed_rows={"headers": True},
-                            ),
-                            style={"padding": "0.5vh 0.5vw", "overflow": "auto"},
-                        ),
+                    panel("Transition Matrices",
+                        dmc.Tabs(
+                            [
+                                dmc.TabsList(
+                                    [
+                                        dmc.TabsTab("TREND", value="trend", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                        dmc.TabsTab("BEAR VOL", value="bear", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                        dmc.TabsTab("NEUTRAL VOL", value="neutral", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                        dmc.TabsTab("BULL VOL", value="bull", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                    ],
+                                    style={"borderBottom": f"1px solid {PANEL_BORDER}"},
+                                ),
+                                dmc.TabsPanel(
+                                    _tm_table(data.trend_tm_df.reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
+                                    value="trend"
+                                ),
+                                dmc.TabsPanel(
+                                    _tm_table(data.vol_transition_dict[-1].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
+                                    value="bear"
+                                ),
+                                dmc.TabsPanel(
+                                    _tm_table(data.vol_transition_dict[0].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
+                                    value="neutral"
+                                ),
+                                dmc.TabsPanel(
+                                    _tm_table(data.vol_transition_dict[1].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
+                                    value="bull"
+                                ),
+                            ],
+                            value="trend",
+                            style={"display": "flex", "flexDirection": "column", "height": "100%"},
+                        )
                     ),
-                    html.Div(legend_div, style={"flex": 0.4}),
+                    panel("Regime Legend",
+                        html.Div(
+                            [legend_pill(state_colors[i], state_labels[i], i) for i in range(1, 7)],
+                            style={
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "justifyContent": "space-evenly",
+                                "height": "100%",
+                                "padding": "0.8vh 1vw",
+                            },
+                        ),
+                        flex=0.4
+                    ),
                 ],
                 style={"display": "flex", "gap": "0.8vw", "height": "34vh", "marginBottom": "0.8vw"},
             ),

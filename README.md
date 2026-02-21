@@ -1,6 +1,6 @@
-# 📈 Financial Data Analytics Dashboard
+# CONTENUIX — Regime-Based Market Analytics
 
-An interactive financial analytics dashboard built with Dash and Plotly, featuring regime-based Monte Carlo simulation, CAPM analysis, and real-time market data.
+An interactive equity analytics dashboard built with Dash and Plotly, featuring hierarchical Markov regime detection, regime-conditional Monte Carlo simulation, CAPM analysis, and AI-generated insights.
 
 ## Example
 ![Dashboard Example](./example.png)
@@ -9,41 +9,45 @@ An interactive financial analytics dashboard built with Dash and Plotly, featuri
 
 ## Methodology
 
-### Regime Detection
+### Yang–Zhang Volatility
+Volatility is estimated using the **Yang–Zhang estimator**, which accounts for overnight gaps and intraday price ranges. It is more robust than close-to-close volatility and forms the basis for vol regime classification.
 
-Daily log returns are computed from historical price data. Volatility is estimated using the **Yang–Zhang estimator**, which accounts for overnight gaps and intraday price ranges — making it more robust than simple close-to-close volatility. Trend strength is measured using a rolling OLS slope t-statistic, which captures how significant a directional move is relative to the noise around it.
+### Trend Detection
+Trend strength is measured using a rolling OLS slope t-statistic over a configurable window. This captures how significant a directional move is relative to noise, and is used to classify each day into one of three trend states: **Bear**, **Neutral**, or **Bull**.
 
-These two signals — volatility and trend — are combined to classify each trading day into one of **six market regimes**, ranging from high-volatility bull to high-volatility bear.
+### Hierarchical Regime Model
+The model is two-layered. The trend state is the master driver, estimated via a hysteresis-gated t-stat threshold to prevent rapid state flickering. The volatility state — **Low** or **High** — is estimated conditionally within each trend state, using a rolling quantile cutoff that adapts in calendar time via EWM smoothing. The combination of three trend states and two vol states produces **six distinct market regimes**.
 
-### Markov Transition Matrix
+### Markov Transition Matrices
+A first-order Markov trend transition matrix (3×3) is estimated from the historical regime sequence. Separately, three vol transition matrices (2×2) are estimated conditionally per trend state, with cross-boundary transitions excluded to avoid fabricating regime changes that never occurred.
 
-A first-order Markov transition matrix is estimated from the historical regime sequence. This captures how likely the market is to stay in its current regime or shift to another — for example, whether a low-volatility bull run tends to persist or quickly revert.
+### Regime-Conditional Monte Carlo
+Each simulated path evolves by first sampling the next trend state from the trend transition matrix, then sampling the vol state from the corresponding conditional vol matrix. Returns are then drawn from the six-regime return distribution for the resolved regime. Running 20,000 paths this way captures volatility clustering, regime persistence, and asymmetric risk dynamics that standard GBM models miss.
 
-### Regime-Conditional Parameters
+### CAPM
+Alpha and beta are estimated via OLS regression of the stock's log returns against SPY over the selected window.
 
-For each regime, the mean and standard deviation of returns are computed separately. This means both drift and volatility vary depending on which regime is active, rather than assuming a single constant value across all market conditions.
-
-### Monte Carlo Simulation
-
-Each simulated path evolves day-by-day by first sampling the next regime from the transition matrix, then drawing a return from that regime's distribution. Running 1,000+ paths this way captures volatility clustering, regime persistence, and non-constant risk dynamics that standard GBM models miss.
+### AI Summary
+A locally-run LLM (Gemma 2B via Ollama) generates a plain-language technical insight from the simulation output and CAPM metrics, displayed inline on the dashboard.
 
 ---
 
 ## Features
-
-- **Historical price chart** with interactive zoom
-- **Markov regime state overlay** showing detected regimes over time
-- **State transition matrix** showing regime persistence probabilities
-- **Monte Carlo simulation** with probability of profit, average gain/loss, and expected return
-- **CAPM metrics** — alpha and beta computed against SPY
+- **Historical price chart** with adjusted OHLCV data
+- **Markov regime state overlay** — six color-coded regimes over price history
+- **Transition matrix panel** — tabbed view of trend and per-trend vol matrices
+- **Monte Carlo simulation** — 20,000 paths with 5th/95th percentile bands
+- **Simulation metrics** — probability of profit, average gain/loss, expected return
+- **CAPM metrics** — alpha and beta vs SPY
+- **AI-generated insight** — compact technical summary from a local LLM
 
 ---
 
 ## Stack
-
 - [Dash](https://dash.plotly.com/) + [Plotly](https://plotly.com/)
 - [dash-mantine-components](https://www.dash-mantine-components.com/)
 - [MarketStack API](https://marketstack.com/) for price data
+- [Ollama](https://ollama.com/) + Gemma 2B for AI summaries
 
 ---
 
