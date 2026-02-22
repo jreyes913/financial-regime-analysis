@@ -389,22 +389,29 @@ class StockData:
         self.simulation_metrics()
 
     def compute_capm_metrics(
-            self,
-            benchmark_df: pd.DataFrame= pd.DataFrame()
-            ):
+        self,
+        benchmark_df: pd.DataFrame = pd.DataFrame()
+    ):
         if not self.has_data:
             print("No data to analyze.")
-        else:
-            df = self.history[['Log Return']].merge(
+            return
+
+        df = self.history[['Log Return']].merge(
             benchmark_df[['Log Return']],
             left_index=True,
             right_index=True,
             how='inner',
             suffixes=(f'_{self.symbol}', '_SPY')
-            )
-            df.columns = [self.symbol, 'SPY']
-            beta, alpha = np.polyfit(df["SPY"], df[self.symbol], 1)
-            self.beta = beta
-            self.alpha = alpha
-            self.capm_df = df
-            self.has_capm = True
+        )
+        #df.columns = [self.symbol, 'SPY']
+        benchmark_col = 'SPY_bench' if self.symbol == 'SPY' else 'SPY'
+        df.columns = [self.symbol, benchmark_col]
+
+        x = df[benchmark_col].to_numpy()
+        y = df[self.symbol].to_numpy()
+
+        beta, alpha = np.polyfit(x, y, 1)
+        self.beta = beta
+        self.alpha = alpha
+        self.capm_df = df
+        self.has_capm = True
