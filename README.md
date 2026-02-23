@@ -46,7 +46,7 @@ A locally-run LLM (Gemma 2B via Ollama) generates a plain-language technical ins
 ## Stack
 - [Dash](https://dash.plotly.com/) + [Plotly](https://plotly.com/)
 - [dash-mantine-components](https://www.dash-mantine-components.com/)
-- [MarketStack API](https://marketstack.com/) for price data
+- [Tiingo API](https://www.tiingo.com/) for price data
 - [Ollama](https://ollama.com/) + Gemma 2B for AI summaries
 
 ---

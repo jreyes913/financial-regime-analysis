@@ -13,14 +13,13 @@ from src.summary import stockSummary
 
 filterwarnings("ignore")
 
-# Required before Dash() when using dash-mantine-components
 _dash_renderer._set_react_version("18.2.0")
 
 # =========================
 # CONFIG
 # =========================
 config = dotenv_values(".env", encoding="utf-8-sig")
-api_key = config["MARKETSTACK_KEY"]
+api_key = config["TIINGO_KEY"]
 SPY = "SPY"
 
 app = dash.Dash(
@@ -134,6 +133,7 @@ def legend_pill(color, label, number):
         style={"display": "flex", "alignItems": "center", "marginBottom": "2.35vh"},
     )
 
+
 def panel(title, children, flex=1, extra_style=None):
     s = {
         "flex": flex,
@@ -174,7 +174,6 @@ def panel(title, children, flex=1, extra_style=None):
     )
 
 
-# Shared styles dict for dmc.DatePickerInput so both pickers are identical
 DATE_PICKER_STYLES = {
     "input": {
         "backgroundColor": "#080F14",
@@ -191,7 +190,6 @@ DATE_PICKER_STYLES = {
 
 
 def labeled_date_picker(label, picker_id, date_value):
-    """Label + dmc.DatePickerInput, styled to match the rest of the navbar."""
     return html.Div(
         [
             html.Div(
@@ -214,6 +212,7 @@ def labeled_date_picker(label, picker_id, date_value):
         ]
     )
 
+
 def _tm_table(df, cell_style, header_style):
     return html.Div(
         dash_table.DataTable(
@@ -230,18 +229,15 @@ def _tm_table(df, cell_style, header_style):
         style={"padding": "0.5vh 0.5vw"},
     )
 
+
 # =========================
 # LAYOUT
-# Wrap everything in dmc.MantineProvider so the calendar popup
-# inherits dark mode automatically — no CSS overrides needed.
 # =========================
 app.layout = dmc.MantineProvider(
     forceColorScheme="dark",
     theme={
         "fontFamily": FONT_MONO,
         "primaryColor": "teal",
-        # Map our accent green onto Mantine's teal scale so selected
-        # days, focus rings, and hover states all use #00FFA3.
         "colors": {
             "teal": [
                 "#e6fff5", "#b3ffe0", "#80ffcc", "#4dffb8",
@@ -256,7 +252,6 @@ app.layout = dmc.MantineProvider(
                 # ---- TOP NAV BAR ----
                 html.Div(
                     [
-                        # Brand
                         html.Div(
                             [
                                 html.Span("▲", style={"color": ACCENT_GREEN, "marginRight": "0.5vw", "fontSize": "1vw"}),
@@ -269,12 +264,10 @@ app.layout = dmc.MantineProvider(
                                         "color": TEXT_PRIMARY,
                                         "letterSpacing": "0.1em",
                                     },
-                                )
+                                ),
                             ],
                             style={"display": "flex", "alignItems": "center"},
                         ),
-
-                        # Controls
                         html.Div(
                             [
                                 # Ticker
@@ -342,7 +335,6 @@ app.layout = dmc.MantineProvider(
                                         ),
                                     ]
                                 ),
-                                # Date pickers — clean, dark, no CSS hacks
                                 labeled_date_picker(
                                     "START DATE",
                                     "start-date",
@@ -353,7 +345,6 @@ app.layout = dmc.MantineProvider(
                                     "end-date",
                                     datetime.today().strftime("%Y-%m-%d"),
                                 ),
-                                # Run button
                                 html.Button(
                                     [
                                         html.Span("▶ ", style={"color": DARK_BG}),
@@ -404,8 +395,8 @@ app.layout = dmc.MantineProvider(
                         },
                     ),
                     color=ACCENT_GREEN,
-                    type="circle",  # or "dot", "default"
-                )
+                    type="circle",
+                ),
             ],
             style={
                 "background": DARK_BG,
@@ -425,8 +416,6 @@ percentage = dash_table.FormatTemplate.percentage(2)
 
 # =========================
 # CALLBACK
-# dmc.DatePickerInput exposes its value via "value" (not "date"),
-# which is consistent with every other Dash input component.
 # =========================
 @app.callback(
     Output("main-content", "children"),
@@ -462,13 +451,17 @@ def run_sim(n, symbol, window, start, end):
         spy_data = StockData()
 
         raw = loader.load_ticker(symbol=symbol, start=start, end=end)
-        raw_spy_history = loader.load_ticker(symbol=SPY, start=start, end=end)
-        spy_df = spy_data.transform_data(symbol=SPY, raw_history=raw_spy_history)
+        raw_spy = loader.load_ticker(symbol=SPY, start=start, end=end)
 
+        # Both transform_data calls store hourly + daily history internally
         data.transform_data(symbol=symbol, raw_history=raw)
+        spy_data.transform_data(symbol=SPY, raw_history=raw_spy)
+
         data.markov_states(days=window)
         data.monte_carlo(days=window)
-        data.compute_capm_metrics(benchmark_df=spy_df)
+
+        # Pass the full spy_data StockData object — CAPM uses spy_data.history_daily
+        data.compute_capm_metrics(benchmark_df=spy_data)
 
         plots = StockPlots(data)
 
@@ -491,16 +484,17 @@ def run_sim(n, symbol, window, start, end):
 
         summary = {
             "ticker": symbol,
-            "horizon_days": int(data.days / 3),
+            "horizon_days": data.sim_days,           # days from monte_carlo()
+            "horizon_hours": data.sim_hours,          # total hourly steps simulated
             "rolling_window": data.days,
-            "drift": data.drift,
-            "volatility": data.volatility,
+            "drift": f"{data.drift:.2%}",
+            "volatility": f"{data.volatility:.2%}",
             "alpha": data.alpha,
             "beta": data.beta,
-            "probability_of_profit": data.sim_pop,
-            "average_gain": data.sim_avg_gain,
-            "average_loss": data.sim_avg_loss,
-            "expected_return": data.sim_expected_return,
+            "probability_of_profit": f"{data.sim_pop:.2%}",
+            "average_gain": f"{data.sim_avg_gain:.2%}",
+            "average_loss": f"{data.sim_avg_loss:.2%}",
+            "expected_return": f"{data.sim_expected_return:.2%}",
         }
         data_summary = stockSummary(summary=summary)
         data_summary.generate_summary()
@@ -528,7 +522,6 @@ def run_sim(n, symbol, window, start, end):
     }
 
     def stat_block(items):
-        """Renders a list of (label, value, color) tuples as stacked stat rows."""
         return html.Div(
             [
                 html.Div(
@@ -547,7 +540,6 @@ def run_sim(n, symbol, window, start, end):
             # Symbol header + summary row
             html.Div(
                 [
-                    # Left: symbol title
                     html.Div(
                         [
                             html.Span(symbol.upper(), style={"fontFamily": FONT_DISPLAY, "fontSize": "1.1vw", "fontWeight": 800, "color": ACCENT_GREEN, "letterSpacing": "0.05em"}),
@@ -555,7 +547,6 @@ def run_sim(n, symbol, window, start, end):
                         ],
                         style={"display": "flex", "alignItems": "center", "flexShrink": 0},
                     ),
-                    # Right: AI summary (wraps to more lines if long)
                     html.Div(
                         data_summary.message,
                         style={
@@ -578,36 +569,24 @@ def run_sim(n, symbol, window, start, end):
             # Row 1
             html.Div(
                 [
-                    panel("Historical Price",      dcc.Graph(figure=fig_price,  style={"flex": 1.3}, config={"displayModeBar": False})),
-                    panel("Markov Regime States",  dcc.Graph(figure=fig_states, style={"flex": 1.3}, config={"displayModeBar": False})),
+                    panel("Historical Price",     dcc.Graph(figure=fig_price,  style={"flex": 1.3}, config={"displayModeBar": False})),
+                    panel("Markov Regime States", dcc.Graph(figure=fig_states, style={"flex": 1.3}, config={"displayModeBar": False})),
                     panel("Transition Matrices",
                         dmc.Tabs(
                             [
                                 dmc.TabsList(
                                     [
-                                        dmc.TabsTab("TREND", value="trend", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
-                                        dmc.TabsTab("BEAR VOL", value="bear", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                        dmc.TabsTab("TREND",       value="trend",   style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                        dmc.TabsTab("BEAR VOL",    value="bear",    style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
                                         dmc.TabsTab("NEUTRAL VOL", value="neutral", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
-                                        dmc.TabsTab("BULL VOL", value="bull", style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
+                                        dmc.TabsTab("BULL VOL",    value="bull",    style={"fontSize": "0.45vw", "fontFamily": FONT_MONO, "color": TEXT_MUTED}),
                                     ],
                                     style={"borderBottom": f"1px solid {PANEL_BORDER}"},
                                 ),
-                                dmc.TabsPanel(
-                                    _tm_table(data.trend_tm_df.reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
-                                    value="trend"
-                                ),
-                                dmc.TabsPanel(
-                                    _tm_table(data.vol_transition_dict[-1].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
-                                    value="bear"
-                                ),
-                                dmc.TabsPanel(
-                                    _tm_table(data.vol_transition_dict[0].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
-                                    value="neutral"
-                                ),
-                                dmc.TabsPanel(
-                                    _tm_table(data.vol_transition_dict[1].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header),
-                                    value="bull"
-                                ),
+                                dmc.TabsPanel(_tm_table(data.trend_tm_df.reset_index().rename(columns={"index": ""}),          table_style_cell, table_style_header), value="trend"),
+                                dmc.TabsPanel(_tm_table(data.vol_transition_dict[-1].reset_index().rename(columns={"index": ""}), table_style_cell, table_style_header), value="bear"),
+                                dmc.TabsPanel(_tm_table(data.vol_transition_dict[0].reset_index().rename(columns={"index": ""}),  table_style_cell, table_style_header), value="neutral"),
+                                dmc.TabsPanel(_tm_table(data.vol_transition_dict[1].reset_index().rename(columns={"index": ""}),  table_style_cell, table_style_header), value="bull"),
                             ],
                             value="trend",
                             style={"display": "flex", "flexDirection": "column", "height": "100%"},
@@ -624,7 +603,7 @@ def run_sim(n, symbol, window, start, end):
                                 "padding": "0.8vh 1vw",
                             },
                         ),
-                        flex=0.4
+                        flex=0.4,
                     ),
                 ],
                 style={"display": "flex", "gap": "0.8vw", "height": "34vh", "marginBottom": "0.8vw"},
@@ -633,18 +612,22 @@ def run_sim(n, symbol, window, start, end):
             # Row 2
             html.Div(
                 [
-                    panel("Monte Carlo Simulation", dcc.Graph(figure=fig_sim,   style={"flex": 1}, config={"displayModeBar": False}), flex=2),
-                    panel("GBM Parameters",         stat_block([
-                        ("DRIFT (μ)",     f"{data.drift:.4%}",      ACCENT_GREEN),
-                        ("VOLATILITY (σ)",f"{data.volatility:.4%}", ACCENT_CYAN),
-                        ("HORIZON",       f"{int(data.days/3)} days",      TEXT_PRIMARY),
-                    ])),
-                    panel("Factor Chart",  dcc.Graph(figure=fig_greek, style={"flex": 1}, config={"displayModeBar": False}), flex=2),
-                    panel("CAPM Metrics",           stat_block([
-                        ("ALPHA (α)", f"{data.alpha:.8f}", ACCENT_GREEN if data.alpha > 0 else ACCENT_RED),
-                        ("BETA (β)",  f"{data.beta:.8f}",  ACCENT_CYAN),
-                        ("VS BENCHMARK", "SPY",            TEXT_MUTED),
-                    ])),
+                    panel("Monte Carlo Simulation", dcc.Graph(figure=fig_sim, style={"flex": 1}, config={"displayModeBar": False}), flex=2),
+                    panel("GBM Parameters",
+                        stat_block([
+                            ("DRIFT (μ)",      f"{data.drift:.4%}",              ACCENT_GREEN),
+                            ("VOLATILITY (σ)", f"{data.volatility:.4%}",         ACCENT_CYAN),
+                            ("HORIZON",        f"{data.sim_days}d / {data.sim_hours}h", TEXT_PRIMARY),
+                        ])
+                    ),
+                    panel("Factor Chart", dcc.Graph(figure=fig_greek, style={"flex": 1}, config={"displayModeBar": False}), flex=2),
+                    panel("CAPM Metrics",
+                        stat_block([
+                            ("ALPHA (α)",    f"{data.alpha:.8f}", ACCENT_GREEN if data.alpha > 0 else ACCENT_RED),
+                            ("BETA (β)",     f"{data.beta:.8f}",  ACCENT_CYAN),
+                            ("VS BENCHMARK", "SPY",               TEXT_MUTED),
+                        ])
+                    ),
                 ],
                 style={"display": "flex", "gap": "0.8vw", "height": "28vh", "marginBottom": "0.8vw"},
             ),
@@ -652,10 +635,10 @@ def run_sim(n, symbol, window, start, end):
             # Metrics row
             html.Div(
                 [
-                    metric_card("Probability of Profit", f"{data.sim_pop:.2%}",             pop_color),
-                    metric_card("Average Gain",          f"{data.sim_avg_gain:.2%}",         ACCENT_GREEN),
-                    metric_card("Average Loss",          f"{abs(data.sim_avg_loss):.2%}",    ACCENT_RED),
-                    metric_card("Expected Return",       f"{data.sim_expected_return:.2%}",  exp_color),
+                    metric_card("Probability of Profit", f"{data.sim_pop:.2%}",          pop_color),
+                    metric_card("Average Gain",          f"{data.sim_avg_gain:.2%}",      ACCENT_GREEN),
+                    metric_card("Average Loss",          f"{abs(data.sim_avg_loss):.2%}", ACCENT_RED),
+                    metric_card("Expected Return",       f"{data.sim_expected_return:.2%}", exp_color),
                 ],
                 style={"display": "flex", "gap": "0.8vw", "height": "12vh"},
             ),

@@ -1,100 +1,102 @@
 import pandas as pd
 import numpy as np
 
+
 def ols_slope_t(y_window):
     n = len(y_window)
     x = np.arange(n)
     x_mean = x.mean()
     y_mean = y_window.mean()
-    denominator = np.sum((x - x_mean)**2)
+    denominator = np.sum((x - x_mean) ** 2)
     beta = np.sum((x - x_mean) * (y_window - y_mean)) / denominator
     residuals = y_window - (y_mean + beta * (x - x_mean))
-    s_squared = np.sum(residuals**2) / (n - 2)
+    s_squared = np.sum(residuals ** 2) / (n - 2)
     se_beta = np.sqrt(s_squared / denominator)
     return beta / se_beta
+
+
+HOURS_PER_DAY = 6
+
 
 class StockData:
     def __init__(self):
         self.symbol = None
         self.start = None
         self.end = None
-        self.interval = None
-        self.history = None
+        self.history = None          # hourly bars
+        self.history_daily = None    # daily OHLCV (for CAPM, plotting)
         self.has_data = False
         self.calculations = None
         self.calculations_states = None
-        self.transition_matrix = None
+        self.calculations_states_6 = None
+        self.trend_transition_matrix = None
+        self.trend_tm_df = None
+        self.vol_transition_dict = None
         self.has_states = False
-        self.pred_price_runs = None
-        self.pred_state_runs = None
+        self.pred_price_runs = None  # (num_runs, sim_hours)
+        self.pred_trend_runs = None
+        self.pred_vol_runs = None
         self.drift = None
         self.volatility = None
+        self.sim_days = None
+        self.sim_hours = None
         self.has_pred = False
         self.days = None
         self.beta = None
         self.alpha = None
         self.capm_df = None
         self.has_capm = False
+
     def transform_data(
             self,
             symbol: str = "AAPL",
             raw_history: pd.DataFrame = pd.DataFrame()
     ):
+        """
+        Accepts DataLoader.load_ticker() output:
+          columns: close, high, low, open, day, time, hour
+        Prices are already split-adjusted by DataLoader.
+        Stores hourly history and aggregated daily history.
+        """
         history = raw_history.copy()
 
-        # --- Parse and sort ascending for clean shift() operations ---
-        history['Date'] = pd.to_datetime(history['date'])
-        history = history.sort_values('Date', ascending=True).reset_index(drop=True)
+        if not isinstance(history.index, pd.DatetimeIndex):
+            history.index = pd.to_datetime(history.index)
 
-        # --- Adjustment factor (backward from most recent) ---
-        # Iterate descending: each day's factor reflects all corporate actions
-        # that occurred on strictly later dates
-        n = len(history)
-        adj_factors = np.ones(n)
-        cum_factor = 1.0
+        # --- Hourly history ---
+        hourly = history[['open', 'high', 'low', 'close', 'day', 'hour']].copy()
+        hourly.columns = ['Open', 'High', 'Low', 'Close', 'Day', 'Hour']
+        hourly = hourly.sort_index()
 
-        for i in range(n - 1, -1, -1):
-            adj_factors[i] = cum_factor
-            row_split = history.at[i, 'split_factor'] if history.at[i, 'split_factor'] > 0 else 1.0
-            raw_close = history.at[i, 'close']
-            row_div   = history.at[i, 'dividend'] if history.at[i, 'dividend'] > 0 else 0.0
-            div_ratio = (raw_close - row_div) / raw_close if row_div > 0 and raw_close > 0 else 1.0
-            cum_factor *= (div_ratio / row_split)
+        hourly['Upper'] = np.where(hourly['Close'] >= hourly['Open'], hourly['Close'], hourly['Open'])
+        hourly['Lower'] = np.where(hourly['Close'] < hourly['Open'], hourly['Close'], hourly['Open'])
+        hourly['Log Return'] = np.log(hourly['Close'] / hourly['Close'].shift(1))
+        hourly['Spread'] = hourly['High'] - hourly['Low']
+        hourly['Gap'] = np.log(hourly['Open'] / hourly['Close'].shift(1))
+        hourly['Total Return'] = np.cumsum(hourly['Log Return'])
+        hourly.dropna(inplace=True)
 
-        history['adj_factor'] = adj_factors
-
-        # --- Adjusted OHLCV ---
-        history['Open']   = history['open']   * history['adj_factor']
-        history['High']   = history['high']   * history['adj_factor']
-        history['Low']    = history['low']    * history['adj_factor']
-        history['Close']  = history['close']  * history['adj_factor']
-        history['Volume'] = history['volume'] / history['adj_factor']
-
-        # --- Set index and trim ---
-        history = (
-            history[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
-            .set_index('Date')
-            .sort_index()
+        # --- Daily history (for CAPM) ---
+        daily = history.groupby('day').agg(
+            Open=('open', 'first'),
+            High=('high', 'max'),
+            Low=('low', 'min'),
+            Close=('close', 'last'),
         )
+        daily.index = pd.to_datetime(daily.index)
+        daily.index.name = 'Date'
+        daily = daily.sort_index()
+        daily['Log Return'] = np.log(daily['Close'] / daily['Close'].shift(1))
+        daily['Total Return'] = np.cumsum(daily['Log Return'])
+        daily.dropna(inplace=True)
 
-        # --- Derived columns ---
-        history['Upper'] = np.where(history['Close'] >= history['Open'], history['Close'], history['Open'])
-        history['Lower'] = np.where(history['Close'] <  history['Open'], history['Close'], history['Open'])
-
-        history['Log Return']   = np.log(history['Close'] / history['Close'].shift(1))
-        history['Avg Price']    = (history['Close'] + history['Low'] + history['Upper']) / 3
-        history['Spread']       = history['High'] - history['Low']
-        history['Gap']          = np.log(history['Open'] / history['Close'].shift(1))
-        history['Total Return'] = np.cumsum(history['Log Return'])
-
-        history.dropna(inplace=True)
-
-        # --- Assign ---
-        self.symbol   = symbol
-        self.history  = history
+        self.symbol = symbol
+        self.history = hourly
+        self.history_daily = daily
         self.has_data = True
 
         return self.history
+
     def simulation_metrics(self):
         if not self.has_pred:
             print("No Monte Carlo results available.")
@@ -118,27 +120,33 @@ class StockData:
             "average_loss": avg_loss,
             "expected_return": expected_return
         }
+
     def markov_states(self, days: int = 63):
+        """
+        Fits Markov states directly on hourly bars.
+        Rolling window = days * HOURS_PER_DAY bars.
+        """
         if not self.has_data:
             print("No data to analyze.")
             return
 
+        window = days * HOURS_PER_DAY
         calculations = self.history.copy()
 
         # --- Normalized price components ---
         calculations["Normal Open"] = np.log(calculations["Open"] / calculations["Close"].shift(1))
         calculations["Normal High"] = np.log(calculations["High"] / calculations["Open"])
-        calculations["Normal Low"]  = np.log(calculations["Low"]  / calculations["Open"])
-        calculations["Normal Close"]= np.log(calculations["Close"]/ calculations["Open"])
+        calculations["Normal Low"] = np.log(calculations["Low"] / calculations["Open"])
+        calculations["Normal Close"] = np.log(calculations["Close"] / calculations["Open"])
 
         # --- Yang-Zhang Variance & Volatility ---
-        calculations["Normal Close Var"] = calculations["Normal Close"].rolling(window=days).var()
-        calculations["Normal Open Var"]  = calculations["Normal Open"].rolling(window=days).var()
+        calculations["Normal Close Var"] = calculations["Normal Close"].rolling(window=window).var()
+        calculations["Normal Open Var"] = calculations["Normal Open"].rolling(window=window).var()
         calculations["RS Var"] = (
             calculations["Normal High"] * (calculations["Normal High"] - calculations["Normal Close"]) +
-            calculations["Normal Low"]  * (calculations["Normal Low"]  - calculations["Normal Close"])
-        ).rolling(window=days).mean()
-        k = 0.34 / (1.34 + ((days + 1) / (days - 1)))
+            calculations["Normal Low"] * (calculations["Normal Low"] - calculations["Normal Close"])
+        ).rolling(window=window).mean()
+        k = 0.34 / (1.34 + ((window + 1) / (window - 1)))
         calculations["YZ Var"] = (
             calculations["Normal Open Var"] +
             k * calculations["Normal Close Var"] +
@@ -148,8 +156,8 @@ class StockData:
 
         # --- Trend State via OLS t-statistic ---
         calculations["Trend t-stat"] = (
-            calculations["Log Return"]
-            .rolling(window=days)
+            np.log(calculations["Close"])
+            .rolling(window=window)
             .apply(ols_slope_t, raw=True)
         )
 
@@ -174,10 +182,10 @@ class StockData:
             prev_trend_state = trend_state
         calculations["Trend State"] = trend_states
 
-        # --- Vol Cutoff (calendar-time correct) ---
+        # --- Vol Cutoff ---
         unique_trends = [-1, 0, 1]
-        cutoff_window = int(days * 4)
-        min_periods   = int(days * 0.5)
+        cutoff_window = int(window * 4)
+        min_periods = int(window * 0.5)
 
         for trend_val in unique_trends:
             calculations[f"_yz_masked_{trend_val}"] = calculations["YZ Vol"].where(
@@ -188,7 +196,7 @@ class StockData:
                 .rolling(window=cutoff_window, min_periods=min_periods)
                 .quantile(0.65)
                 .ffill()
-                .ewm(span=days, adjust=False)
+                .ewm(span=window, adjust=False)
                 .mean()
             )
 
@@ -197,7 +205,6 @@ class StockData:
             [calculations[f"_cutoff_raw_{t}"] for t in unique_trends]
         )
 
-        # cleanup intermediates
         calculations.drop(
             columns=[c for c in calculations.columns if c.startswith("_")],
             inplace=True
@@ -205,7 +212,7 @@ class StockData:
 
         # --- Vol State ---
         enter_vol = 1.05
-        exit_vol  = 0.95
+        exit_vol = 0.95
         vol_states = []
         prev_vol_state = 0
         for vol, cutoff in zip(calculations["YZ Vol"], calculations["Vol Cutoff"]):
@@ -226,15 +233,13 @@ class StockData:
             (calculations["Trend State"] + 1) + 1
         )
 
-        # --- Drop NaNs before transition matrix computation ---
         calculations.dropna(
             subset=["Trend State", "Vol State", "Regime State", "Log Return"],
             inplace=True
         )
 
-        # --- Lag columns for transition matrices ---
         calculations["Trend State Lag"] = calculations["Trend State"].shift(1)
-        calculations["Vol State Lag"]   = calculations["Vol State"].shift(1)
+        calculations["Vol State Lag"] = calculations["Vol State"].shift(1)
         calculations.dropna(subset=["Trend State Lag", "Vol State Lag"], inplace=True)
 
         # --- Trend Transition Matrix (3x3) ---
@@ -254,9 +259,9 @@ class StockData:
             trend_matrix,
             index=[trend_labels[s] for s in unique_trends],
             columns=[trend_labels[s] for s in unique_trends]
-        ) 
+        )
 
-        # --- Vol Transition Matrices (2x2 per trend, cross-boundary safe) ---
+        # --- Vol Transition Matrices (2x2 per trend) ---
         vol_transition_dict = {}
         for trend_val in unique_trends:
             sub = calculations[
@@ -279,139 +284,142 @@ class StockData:
             )
         self.vol_transition_dict = vol_transition_dict
 
-        # --- Per-state return statistics ---
+        # --- Per-state return statistics (hourly scale) ---
         self.calculations_states = (
             calculations.groupby("Trend State")["Log Return"]
             .agg(['mean', 'std'])
-            .rename(columns={'mean': 'Daily Mean', 'std': 'Daily Std'})
+            .rename(columns={'mean': 'Hourly Mean', 'std': 'Hourly Std'})
         )
         self.calculations_states_6 = (
             calculations.groupby("Regime State")["Log Return"]
             .agg(['mean', 'std'])
-            .rename(columns={'mean': 'Daily Mean', 'std': 'Daily Std'})
+            .rename(columns={'mean': 'Hourly Mean', 'std': 'Hourly Std'})
             .sort_index()
         )
 
-        # --- Metadata ---
         self.calculations = calculations
         self.days = days
         self.has_states = True
-    
+
     def monte_carlo(
         self,
         days: int = 63,
         num_runs: int = int(3e4)
     ):
+        """
+        Simulates hourly price paths over (days / 3) trading days.
+        Regime transitions happen once per day (at the open of each day).
+        Within a day all 6 hourly bars share the same regime.
+        Output shape: pred_price_runs = (num_runs, sim_days * HOURS_PER_DAY)
+        """
         if not self.has_states:
             print("No Markov states to make predictions.")
             return
 
-        days = int(days / 3)
+        sim_days = int(days / 3)
+        sim_hours = sim_days * HOURS_PER_DAY
 
-        # --- Starting conditions ---
-        start_price   = self.history['Close'].iloc[-1]
-        start_trend   = int(self.calculations['Trend State'].iloc[-1])
-        start_vol     = int(self.calculations['Vol State'].iloc[-1])
+        start_price = self.history['Close'].iloc[-1]
+        start_trend = int(self.calculations['Trend State'].iloc[-1])
+        start_vol = int(self.calculations['Vol State'].iloc[-1])
 
-        # --- Precompute return stats indexed by Regime State (1-6) ---
-        # calculations_states_6 is indexed by Regime State
-        regime_means = self.calculations_states_6['Daily Mean'].to_dict()
-        regime_stds  = self.calculations_states_6['Daily Std'].to_dict()
+        regime_means = self.calculations_states_6['Hourly Mean'].to_dict()
+        regime_stds = self.calculations_states_6['Hourly Std'].to_dict()
 
-        # --- Transition matrices ---
-        unique_trends  = [-1, 0, 1]
-        trend_tm       = self.trend_transition_matrix          # (3,3) numpy array
-        trend_idx      = {t: i for i, t in enumerate(unique_trends)}
+        unique_trends = [-1, 0, 1]
+        trend_tm = self.trend_transition_matrix
+        trend_idx = {t: i for i, t in enumerate(unique_trends)}
+        vol_tm = {t: self.vol_transition_dict[t].values for t in unique_trends}
 
-        # vol_transition_dict: {trend_val: 2x2 DataFrame, index/cols = ["low","high"]}
-        vol_tm = {
-            t: self.vol_transition_dict[t].values              # (2,2) numpy array
-            for t in unique_trends
-        }
-
-        # --- Regime state encoding (must match markov_states) ---
         def regime_state(trend, vol):
             return (vol * 3) + (trend + 1) + 1
 
-        # --- Storage ---
-        prices      = np.zeros((days, num_runs))
-        trend_states= np.zeros((days, num_runs), dtype=int)
-        vol_states  = np.zeros((days, num_runs), dtype=int)
+        prices = np.zeros((sim_hours, num_runs))
+        trend_states = np.zeros((sim_hours, num_runs), dtype=int)
+        vol_states = np.zeros((sim_hours, num_runs), dtype=int)
 
-        prices[0, :]       = start_price
+        prices[0, :] = start_price
         trend_states[0, :] = start_trend
-        vol_states[0, :]   = start_vol
+        vol_states[0, :] = start_vol
 
-        # --- Simulation loop ---
-        for t in range(1, days):
-            prev_trends = trend_states[t - 1, :]   # (num_runs,)
-            prev_vols   = vol_states[t - 1, :]     # (num_runs,)
+        # Pre-draw the day-level regime transitions
+        # Regime transitions only at the start of each new day (hour % HOURS_PER_DAY == 0)
+        for t in range(1, sim_hours):
+            prev_trends = trend_states[t - 1, :]
+            prev_vols = vol_states[t - 1, :]
 
-            # 1. Transition trend state
-            u_trend    = np.random.rand(num_runs)
-            trend_rows = np.array([trend_idx[tr] for tr in prev_trends])  # row index into trend_tm
-            cum_trend  = np.cumsum(trend_tm[trend_rows], axis=1)           # (num_runs, 3)
-            new_trend_idx = np.argmax(cum_trend > u_trend[:, None], axis=1)
-            new_trends    = np.array(unique_trends)[new_trend_idx]         # map back to -1/0/1
+            if t % HOURS_PER_DAY == 0:
+                # New trading day — draw new regime for each run
+                u_trend = np.random.rand(num_runs)
+                trend_rows = np.array([trend_idx[tr] for tr in prev_trends])
+                cum_trend = np.cumsum(trend_tm[trend_rows], axis=1)
+                new_trend_idx = np.argmax(cum_trend > u_trend[:, None], axis=1)
+                new_trends = np.array(unique_trends)[new_trend_idx]
 
-            # 2. Transition vol state conditional on new trend
-            u_vol     = np.random.rand(num_runs)
-            new_vols  = np.empty(num_runs, dtype=int)
-            for trend_val in unique_trends:
-                mask = new_trends == trend_val
-                if not mask.any():
-                    continue
-                vtm      = vol_tm[trend_val]                               # (2,2)
-                pv       = prev_vols[mask]                                 # vol state for this subset
-                cum_vol  = np.cumsum(vtm[pv], axis=1)                     # (subset, 2)
-                new_vols[mask] = np.argmax(cum_vol > u_vol[mask, None], axis=1)
+                u_vol = np.random.rand(num_runs)
+                new_vols = np.empty(num_runs, dtype=int)
+                for trend_val in unique_trends:
+                    mask = new_trends == trend_val
+                    if not mask.any():
+                        continue
+                    vtm = vol_tm[trend_val]
+                    pv = prev_vols[mask]
+                    cum_vol = np.cumsum(vtm[pv], axis=1)
+                    new_vols[mask] = np.argmax(cum_vol > u_vol[mask, None], axis=1)
+            else:
+                # Same trading day — carry forward the regime
+                new_trends = prev_trends
+                new_vols = prev_vols
 
             trend_states[t, :] = new_trends
-            vol_states[t, :]   = new_vols
+            vol_states[t, :] = new_vols
 
-            # 3. Sample returns from 6-regime stats
-            regimes = regime_state(new_trends, new_vols)                   # (num_runs,)
-            mu      = np.array([regime_means[r] for r in regimes])
-            sigma   = np.array([regime_stds[r]  for r in regimes])
-            z       = np.random.randn(num_runs)
+            # Draw hourly return from regime distribution
+            regimes = regime_state(new_trends, new_vols)
+            mu = np.array([regime_means[r] for r in regimes])
+            sigma = np.array([regime_stds[r] for r in regimes])
+            z = np.random.randn(num_runs)
             prices[t, :] = prices[t - 1, :] * np.exp((mu - (sigma ** 2) / 2) + sigma * z)
 
-        # --- Store results ---
-        self.pred_price_runs  = prices.T.tolist()
-        self.pred_trend_runs  = trend_states.T.tolist()
-        self.pred_vol_runs    = vol_states.T.tolist()
+        self.pred_price_runs = prices.T.tolist()   # (num_runs, sim_hours)
+        self.pred_trend_runs = trend_states.T.tolist()
+        self.pred_vol_runs = vol_states.T.tolist()
+        self.sim_days = sim_days
+        self.sim_hours = sim_hours
 
-        final_prices          = prices[-1, :]
-        sim_log_returns       = np.log(final_prices / start_price)
-        self.drift            = sim_log_returns.mean()
-        self.volatility       = sim_log_returns.std()
-        self.has_pred         = True
+        final_prices = prices[-1, :]
+        sim_log_returns = np.log(final_prices / start_price)
+        self.drift = sim_log_returns.mean()
+        self.volatility = sim_log_returns.std()
+        self.has_pred = True
         self.simulation_metrics()
 
     def compute_capm_metrics(
         self,
         benchmark_df: pd.DataFrame = pd.DataFrame()
     ):
+        """Uses daily history for CAPM regression against benchmark StockData object."""
         if not self.has_data:
             print("No data to analyze.")
             return
 
-        df = self.history[['Log Return']].merge(
-            benchmark_df[['Log Return']],
+        df = self.history_daily[['Log Return']].merge(
+            benchmark_df.history_daily[['Log Return']],
             left_index=True,
             right_index=True,
             how='inner',
-            suffixes=(f'_{self.symbol}', '_SPY')
+            suffixes=('_ticker', '_bench')
         )
-        #df.columns = [self.symbol, 'SPY']
-        benchmark_col = 'SPY_bench' if self.symbol == 'SPY' else 'SPY'
-        df.columns = [self.symbol, benchmark_col]
+        # columns are always 'Log Return_ticker' and 'Log Return_bench'
+        x = df['Log Return_bench'].to_numpy()
+        y = df['Log Return_ticker'].to_numpy()
 
-        x = df[benchmark_col].to_numpy()
-        y = df[self.symbol].to_numpy()
+        self.capm_df = df.rename(columns={
+            'Log Return_ticker': self.symbol,
+            'Log Return_bench': 'SPY'
+        })
 
         beta, alpha = np.polyfit(x, y, 1)
         self.beta = beta
         self.alpha = alpha
-        self.capm_df = df
         self.has_capm = True

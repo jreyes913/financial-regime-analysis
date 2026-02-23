@@ -21,6 +21,7 @@ dependencies = [
     "pydotenv>=0.0.7",
     "python-certifi-win32>=1.6.1",
     "streamlit>=1.19.0",
+    "tiingo>=0.16.1",
     "urllib3>=1.26.18",
     "yfinance>=1.1.0",
 ]
