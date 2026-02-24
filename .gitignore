@@ -4,3 +4,4 @@
 .env
 *.log
 .ruff_cache/
+cache/
